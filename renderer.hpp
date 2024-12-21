@@ -31,10 +31,7 @@ class GameObject;
 class Renderer
 {
 public:
-  uint32_t WIDTH = 1600;
-  uint32_t HEIGHT = 1200;
   const int MAX_FRAMES_IN_FLIGHT = 2;
-  const std::string MODEL_PATH = "models/couch1.obj";
 
   const std::vector<const char *> validationLayers = {
       "VK_LAYER_KHRONOS_validation"};
@@ -45,12 +42,11 @@ public:
   const bool enableValidationLayers = false;
   GLFWwindow *window;
 
-  void run();
+  void initVulkan();
 
-  Renderer();
+  Renderer(Camera &camera, uint32_t &WIDTH, uint32_t &HEIGHT);
 
-private:
-  Camera camera;
+  Camera &camera;
   VkInstance instance;
   VkQueue graphicsQueue;
   VkQueue presentQueue;
@@ -58,11 +54,12 @@ private:
   SwapchainManager swapchainManager;
   BufferManager bufferManager;
   TextureManager textureManager;
+  TextureManager couchTextureManager;
   DescriptorManager descriptorManager;
   PipelineManager pipelineManager;
   DeviceManager deviceManager;
 
-  std::unordered_map<int, std::shared_ptr<GameObject>> drawObjects;
+  std::unordered_map<int, GameObject *> drawObjects;
 
   VkCommandPool commandPool;
   std::vector<VkCommandBuffer> commandBuffers;
@@ -71,37 +68,21 @@ private:
   std::vector<VkSemaphore> renderFinishedSemaphores;
   std::vector<VkFence> inFlightFences;
 
-  std::vector<Vertex> vertices;
-  std::vector<uint32_t> indices;
-
-  bool firstMouse = true;
-  float lastX = WIDTH / 2, lastY = HEIGHT / 2;
-  float deltaTime = 0.0f;
-  float lastFrame = 0.0f;
-
   bool framebufferResized = false;
 
+  void drawFrame();
+
+  void cleanup();
+
+private:
+  uint32_t &WIDTH;
+  uint32_t &HEIGHT;
+  std::vector<Vertex> vertices;
+  std::vector<uint32_t> indices;
   uint32_t currentFrame = 0;
-
-  void initWindow();
-
-  std::chrono::high_resolution_clock::time_point lastTime;
-  int frameCount = 0;
-
-  void initFPSCounter();
-  void updateFPSCounter();
-
-  void processInput();
-  static void mouse_callback(GLFWwindow *window, double xposIn, double yposIn);
-  static void framebufferResizeCallback(GLFWwindow *window, int width, int height);
-  static void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
-
-  void initVulkan();
 
   void createInstance();
   bool checkValidationLayerSupport();
-
-  void loadModel();
 
   void recreateSwapChain();
 
@@ -110,9 +91,4 @@ private:
   void createCommandBuffer();
   void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
   void createCommandPool();
-
-  void mainLoop();
-  void drawFrame();
-
-  void cleanup();
 };

@@ -1,89 +1,12 @@
-#include <tiny_obj_loader.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include "renderer.hpp"
 #include "utils.h"
 #include <cstring>
 
-const std::vector<Vertex> cubeVertices = {
-    {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 0
-    {{0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},  // 1
-    {{0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},   // 2
-    {{-0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},  // 3
-
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 4
-    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},  // 5
-    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},   // 6
-    {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},  // 7
-
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 8
-    {{-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},  // 9
-    {{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},   // 10
-    {{-0.5f, -0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},  // 11
-
-    {{0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 12
-    {{0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},  // 13
-    {{0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},   // 14
-    {{0.5f, -0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},  // 15
-
-    {{-0.5f, 0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 16
-    {{0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},  // 17
-    {{0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},   // 18
-    {{-0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},  // 19
-
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 20
-    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},  // 21
-    {{0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},   // 22
-    {{-0.5f, -0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}   // 23
-};
-
-const std::vector<uint32_t> cubeIndices = {
-    0, 1, 2, 2, 3, 0,
-    4, 7, 6, 6, 5, 4,
-    8, 11, 10, 10, 9, 8,
-    12, 13, 14, 14, 15, 12,
-    16, 19, 18, 18, 17, 16,
-    20, 21, 22, 22, 23, 20};
-
-void Renderer::run()
+Renderer::Renderer(Camera &camera, uint32_t &WIDTH, uint32_t &HEIGHT)
+    : bufferManager(), swapchainManager(), deviceManager(swapchainManager), textureManager(bufferManager), couchTextureManager(bufferManager), descriptorManager(bufferManager), pipelineManager(swapchainManager, descriptorManager), camera(camera), WIDTH(WIDTH), HEIGHT(HEIGHT)
 {
-  initWindow();
-  initVulkan();
-  mainLoop();
-  cleanup();
-}
-
-Renderer::Renderer()
-    : bufferManager(), swapchainManager(), deviceManager(swapchainManager), textureManager(bufferManager), descriptorManager(bufferManager, textureManager), pipelineManager(swapchainManager, descriptorManager)
-{
-}
-
-void Renderer::framebufferResizeCallback(GLFWwindow *window, int width, int height)
-{
-  auto app = reinterpret_cast<Renderer *>(glfwGetWindowUserPointer(window));
-  app->framebufferResized = true;
-}
-
-void Renderer::scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
-{
-  auto app = reinterpret_cast<Renderer *>(glfwGetWindowUserPointer(window));
-  app->camera.ProcessMouseScroll(static_cast<float>(yoffset));
-}
-
-void Renderer::initWindow()
-{
-  glfwInit();
-
-  // glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
-  glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
-  window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-  glfwSetWindowUserPointer(window, this);
-  glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
-  glfwSetScrollCallback(window, scroll_callback);
-  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-  glfwSetCursorPosCallback(window, mouse_callback);
-  swapchainManager.setWindow(window);
 }
 
 void Renderer::initVulkan()
@@ -100,64 +23,22 @@ void Renderer::initVulkan()
   createCommandPool();
   swapchainManager.createDepthResources(deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
   swapchainManager.createFramebuffers(deviceManager.device, pipelineManager.renderPass);
-  textureManager.createTextureImage("textures/awesomeface.png", deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
+  textureManager.createTextureImage("textures/wall.png", deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
   textureManager.createTextureImageView(deviceManager.device);
   textureManager.createTextureSampler(deviceManager.device, deviceManager.physicalDevice);
-  loadModel();
+
+  couchTextureManager.createTextureImage("models/gray.png", deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
+  couchTextureManager.createTextureImageView(deviceManager.device);
+  couchTextureManager.createTextureSampler(deviceManager.device, deviceManager.physicalDevice);
+
   // bufferManager.createVertexBuffer(vertices, 0, deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
   // bufferManager.createIndexBuffer(indices, 0, deviceManager.device, deviceManager.physicalDevice, commandPool, //graphicsQueue);
   // bufferManager.createUniformBuffers(MAX_FRAMES_IN_FLIGHT, deviceManager.device, deviceManager.physicalDevice, 2);
-  descriptorManager.createDescriptorPool(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 2);
+  descriptorManager.createDescriptorPool(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 4);
   // descriptorManager.createDescriptorSets(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 1);
   // descriptorManager.addDescriptorSets(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 1);
   createCommandBuffer();
   createSyncObjects();
-
-  drawObjects.emplace(0, std::make_shared<GameObject>(bufferManager, descriptorManager, 0, MAX_FRAMES_IN_FLIGHT, deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue, glm::vec3(0, 5, 0), glm::vec3(0.1, 0.1, 0.1), 0, 0, vertices, indices));
-
-  drawObjects.emplace(1, std::make_shared<GameObject>(bufferManager, descriptorManager, 1, MAX_FRAMES_IN_FLIGHT, deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue, glm::vec3(0, -15, 0), glm::vec3(2, 2, 2), 0, 0, cubeVertices, cubeIndices));
-}
-
-void Renderer::loadModel()
-{
-  tinyobj::attrib_t attrib;
-  std::vector<tinyobj::shape_t> shapes;
-  std::vector<tinyobj::material_t> materials;
-  std::string err;
-
-  bool ret = tinyobj::LoadObj(
-      &attrib,
-      &shapes,
-      &materials,
-      &err,
-      MODEL_PATH.c_str());
-
-  if (!ret)
-  {
-    throw std::runtime_error(err);
-  }
-
-  for (const auto &shape : shapes)
-  {
-    for (const auto &index : shape.mesh.indices)
-    {
-      Vertex vertex{};
-
-      vertex.pos = {
-          attrib.vertices[3 * index.vertex_index + 0],
-          attrib.vertices[3 * index.vertex_index + 1],
-          attrib.vertices[3 * index.vertex_index + 2]};
-
-      vertex.texPos = {
-          attrib.texcoords[2 * index.texcoord_index + 0],
-          1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
-
-      vertex.color = {1.0f, 1.0f, 1.0f};
-
-      vertices.push_back(vertex);
-      indices.push_back(indices.size());
-    }
-  }
 }
 
 void Renderer::recreateSwapChain()
@@ -283,7 +164,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
   for (auto &drawObject : drawObjects)
   {
-    drawObject.second->draw(currentFrame, MAX_FRAMES_IN_FLIGHT, camera.GetViewMatrix(), glm::perspective(glm::radians(camera.Zoom), (float)WIDTH / (float)HEIGHT, 0.1f, 1000.0f), commandBuffer, pipelineManager.pipelineLayout);
+    drawObject.second->draw(this, currentFrame, camera.GetViewMatrix(), glm::perspective(glm::radians(camera.Zoom), (float)WIDTH / (float)HEIGHT, 0.1f, 1000.0f), commandBuffer);
   }
 
   /*
@@ -322,107 +203,6 @@ void Renderer::createCommandPool()
   {
     throw std::runtime_error("failed to create command pool!");
   }
-}
-
-void Renderer::mainLoop()
-{
-  initFPSCounter();
-  while (!glfwWindowShouldClose(window))
-  {
-    float currentFrame = static_cast<float>(glfwGetTime());
-    deltaTime = currentFrame - lastFrame;
-    lastFrame = currentFrame;
-    processInput();
-    glfwPollEvents();
-    drawFrame();
-    updateFPSCounter();
-  }
-
-  vkDeviceWaitIdle(deviceManager.device);
-}
-
-void Renderer::initFPSCounter()
-{
-  lastTime = std::chrono::high_resolution_clock::now();
-}
-
-void Renderer::updateFPSCounter()
-{
-  frameCount++;
-  auto currentTime = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<float> elapsed = currentTime - lastTime;
-
-  if (elapsed.count() >= 1.0f)
-  { // If 1 second has passed
-    float fps = frameCount / elapsed.count();
-    std::cout << "FPS: " << fps << std::endl; // Output FPS
-    frameCount = 0;                           // Reset frame counter
-    lastTime = currentTime;                   // Reset timing
-  }
-}
-
-void Renderer::mouse_callback(GLFWwindow *window, double xposIn, double yposIn)
-{
-  auto app = reinterpret_cast<Renderer *>(glfwGetWindowUserPointer(window));
-  float xpos = static_cast<float>(xposIn);
-  float ypos = static_cast<float>(yposIn);
-
-  if (app->firstMouse)
-  {
-    app->lastX = xpos;
-    app->lastY = ypos;
-    app->firstMouse = false;
-  }
-
-  float xoffset = xpos - app->lastX;
-  float yoffset = app->lastY - ypos;
-
-  app->lastX = xpos;
-  app->lastY = ypos;
-
-  app->camera.ProcessMouseMovement(xoffset, yoffset);
-}
-
-void Renderer::processInput()
-{
-  if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-    glfwSetWindowShouldClose(window, true);
-
-  if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS)
-  {
-    vkQueueWaitIdle(graphicsQueue);
-    bufferManager.freeVertexBuffer(0, deviceManager.device);
-    bufferManager.freeIndexBuffer(0, deviceManager.device);
-    vertices.clear();
-    vertices = cubeVertices;
-    indices.clear();
-    indices = cubeIndices;
-    bufferManager.createVertexBuffer(vertices, 0, deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
-    bufferManager.createIndexBuffer(indices, 0, deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
-  }
-
-  if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS)
-  {
-    vkQueueWaitIdle(graphicsQueue);
-    bufferManager.freeVertexBuffer(0, deviceManager.device);
-    bufferManager.freeIndexBuffer(0, deviceManager.device);
-    vertices.clear();
-    indices.clear();
-    loadModel();
-    bufferManager.createVertexBuffer(vertices, 0, deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
-    bufferManager.createIndexBuffer(indices, 0, deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
-  }
-
-  float cameraSpeed = 20.0f * deltaTime;
-
-  if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-    camera.ProcessKeyboard(FORWARD, deltaTime);
-  if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-    camera.ProcessKeyboard(BACKWARD, deltaTime);
-  if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-    camera.ProcessKeyboard(LEFT, deltaTime);
-  if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-    camera.ProcessKeyboard(RIGHT, deltaTime);
 }
 
 void Renderer::drawFrame()
@@ -503,6 +283,8 @@ void Renderer::cleanup()
   swapchainManager.cleanupSwapChain(deviceManager.device);
 
   textureManager.cleanup(deviceManager.device);
+
+  couchTextureManager.cleanup(deviceManager.device);
 
   bufferManager.cleanup(deviceManager.device);
 

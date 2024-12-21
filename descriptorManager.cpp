@@ -53,7 +53,7 @@ void DescriptorManager::createDescriptorPool(VkDevice device, int MAX_FRAMES_IN_
   }
 }
 
-void DescriptorManager::createDescriptorSets(VkDevice device, int MAX_FRAMES_IN_FLIGHT, int count)
+void DescriptorManager::createDescriptorSets(VkDevice device, int MAX_FRAMES_IN_FLIGHT, int count, TextureManager &textureManager)
 {
   std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * count, descriptorSetLayout);
   VkDescriptorSetAllocateInfo allocInfo{};
@@ -102,7 +102,7 @@ void DescriptorManager::createDescriptorSets(VkDevice device, int MAX_FRAMES_IN_
   }
 }
 
-void DescriptorManager::addDescriptorSets(VkDevice device, int MAX_FRAMES_IN_FLIGHT, int count)
+void DescriptorManager::addDescriptorSets(VkDevice device, int MAX_FRAMES_IN_FLIGHT, int count, TextureManager &textureManager)
 {
   std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * count, descriptorSetLayout);
   VkDescriptorSetAllocateInfo allocInfo{};

@@ -16,11 +16,11 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
-#include "renderer.hpp"
+#include "application.hpp"
 
 int main()
 {
-    Renderer app;
+    Application app;
     try
     {
         app.run();

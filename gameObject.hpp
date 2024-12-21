@@ -3,22 +3,23 @@
 #include <vector>
 #include "vertex.h"
 
-class BufferManager;
-class DescriptorManager;
+class Renderer;
+class TextureManager;
 class GameObject
 {
 public:
-  BufferManager &bufferManager;
-  DescriptorManager &descriptorManager;
   glm::vec3 pos;
   float pitch;
   float yaw;
   glm::vec3 scale;
   int id;
 
-  GameObject(BufferManager &bufferManager, DescriptorManager &descriptorManager, int id, int MAX_FRAMES_IN_FLIGHT, VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue, const glm::vec3 &pos, const glm::vec3 &scale, float yaw, float pitch, std::vector<Vertex> vertices, std::vector<uint32_t> indices);
+  GameObject(Renderer &renderer, int id, const glm::vec3 &pos, const glm::vec3 &scale, float yaw, float pitch, std::vector<Vertex> vertices, std::vector<uint32_t> indices);
   ~GameObject() {}
-  void draw(int currentFrame, int MAX_FRAMES_IN_FLIGHT, glm::mat4 view, glm::mat4 projectionMatrix, VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout);
+  void draw(Renderer *renderer, int currentFrame, glm::mat4 view, glm::mat4 projectionMatrix, VkCommandBuffer commandBuffer);
+  void loadModel(const std::string MODEL_PATH);
+  void setVerticesAndIndices(std::vector<Vertex> vertices, std::vector<uint32_t> indices);
+  void initGraphics(Renderer &renderer, TextureManager &textureManager);
 
 private:
   std::vector<Vertex> vertices;
