@@ -3,8 +3,9 @@
 #include "renderer.hpp"
 #include "utils.h"
 #include <cstring>
+#include "playerCamera.h"
 
-Renderer::Renderer(Camera &camera, uint32_t &WIDTH, uint32_t &HEIGHT)
+Renderer::Renderer(PlayerCamera &camera, uint32_t &WIDTH, uint32_t &HEIGHT)
     : bufferManager(), swapchainManager(), deviceManager(swapchainManager), descriptorManager(bufferManager), pipelineManager(swapchainManager, descriptorManager), camera(camera), WIDTH(WIDTH), HEIGHT(HEIGHT)
 {
 }
@@ -27,7 +28,7 @@ void Renderer::initVulkan()
   // bufferManager.createVertexBuffer(vertices, 0, deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
   // bufferManager.createIndexBuffer(indices, 0, deviceManager.device, deviceManager.physicalDevice, commandPool, //graphicsQueue);
   // bufferManager.createUniformBuffers(MAX_FRAMES_IN_FLIGHT, deviceManager.device, deviceManager.physicalDevice, 2);
-  descriptorManager.createDescriptorPool(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 5);
+  descriptorManager.createDescriptorPool(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 6);
 
   // descriptorManager.createDescriptorSets(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 1);
   // descriptorManager.addDescriptorSets(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 1);
