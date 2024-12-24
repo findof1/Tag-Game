@@ -5,7 +5,7 @@
 #include <cstring>
 
 Renderer::Renderer(Camera &camera, uint32_t &WIDTH, uint32_t &HEIGHT)
-    : bufferManager(), swapchainManager(), deviceManager(swapchainManager), textureManager(bufferManager), couchTextureManager(bufferManager), descriptorManager(bufferManager), pipelineManager(swapchainManager, descriptorManager), camera(camera), WIDTH(WIDTH), HEIGHT(HEIGHT)
+    : bufferManager(), swapchainManager(), deviceManager(swapchainManager), descriptorManager(bufferManager), pipelineManager(swapchainManager, descriptorManager), camera(camera), WIDTH(WIDTH), HEIGHT(HEIGHT)
 {
 }
 
@@ -23,18 +23,12 @@ void Renderer::initVulkan()
   createCommandPool();
   swapchainManager.createDepthResources(deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
   swapchainManager.createFramebuffers(deviceManager.device, pipelineManager.renderPass);
-  textureManager.createTextureImage("textures/wall.png", deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
-  textureManager.createTextureImageView(deviceManager.device);
-  textureManager.createTextureSampler(deviceManager.device, deviceManager.physicalDevice);
-
-  couchTextureManager.createTextureImage("models/gray.png", deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
-  couchTextureManager.createTextureImageView(deviceManager.device);
-  couchTextureManager.createTextureSampler(deviceManager.device, deviceManager.physicalDevice);
 
   // bufferManager.createVertexBuffer(vertices, 0, deviceManager.device, deviceManager.physicalDevice, commandPool, graphicsQueue);
   // bufferManager.createIndexBuffer(indices, 0, deviceManager.device, deviceManager.physicalDevice, commandPool, //graphicsQueue);
   // bufferManager.createUniformBuffers(MAX_FRAMES_IN_FLIGHT, deviceManager.device, deviceManager.physicalDevice, 2);
-  descriptorManager.createDescriptorPool(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 4);
+  descriptorManager.createDescriptorPool(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 5);
+
   // descriptorManager.createDescriptorSets(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 1);
   // descriptorManager.addDescriptorSets(deviceManager.device, MAX_FRAMES_IN_FLIGHT, 1);
   createCommandBuffer();
@@ -281,10 +275,6 @@ void Renderer::cleanup()
 {
   swapchainManager.cleanupDepthImages(deviceManager.device);
   swapchainManager.cleanupSwapChain(deviceManager.device);
-
-  textureManager.cleanup(deviceManager.device);
-
-  couchTextureManager.cleanup(deviceManager.device);
 
   bufferManager.cleanup(deviceManager.device);
 

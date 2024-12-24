@@ -5,13 +5,19 @@
 #include "renderer.hpp"
 #include <vulkan/vulkan.h>
 #include <tiny_obj_loader.h>
+#include <glm/gtc/quaternion.hpp>
+#include "gameObjectPhysicsConfig.hpp"
 
-GameObject::GameObject(Renderer &renderer, int id, const glm::vec3 &pos, const glm::vec3 &scale, float yaw, float pitch, std::vector<Vertex> vertices, std::vector<uint32_t> indices) : id(id), pos(pos), scale(scale), yaw(yaw), pitch(pitch), vertices(vertices), indices(indices)
+GameObject::GameObject(Renderer &renderer, int id, PhysicsConfig &config, const glm::vec3 &pos, const glm::vec3 &scale, const glm::vec3 &rotationZYX, btScalar mass, std::vector<Vertex> vertices, std::vector<uint32_t> indices) : id(id), config(config), pos(pos), scale(scale), rotationZYX(rotationZYX), vertices(vertices), indices(indices), mass(mass), textureManager(renderer.bufferManager)
 {
 }
 
-void GameObject::initGraphics(Renderer &renderer, TextureManager &textureManager)
+void GameObject::initGraphics(Renderer &renderer, std::string texturePath)
 {
+  textureManager.createTextureImage(texturePath, renderer.deviceManager.device, renderer.deviceManager.physicalDevice, renderer.commandPool, renderer.graphicsQueue);
+  textureManager.createTextureImageView(renderer.deviceManager.device);
+  textureManager.createTextureSampler(renderer.deviceManager.device, renderer.deviceManager.physicalDevice);
+
   renderer.bufferManager.createVertexBuffer(vertices, id, renderer.deviceManager.device, renderer.deviceManager.physicalDevice, renderer.commandPool, renderer.graphicsQueue);
 
   renderer.bufferManager.createIndexBuffer(indices, id, renderer.deviceManager.device, renderer.deviceManager.physicalDevice, renderer.commandPool, renderer.graphicsQueue);
@@ -38,8 +44,9 @@ void GameObject::draw(Renderer *renderer, int currentFrame, glm::mat4 view, glm:
 {
   glm::mat4 transformation = glm::mat4(1.0f);
   transformation = glm::translate(transformation, pos);
-  transformation = glm::rotate(transformation, glm::radians(yaw), glm::vec3(0.0f, 1.0f, 0.0f));
-  transformation = glm::rotate(transformation, glm::radians(pitch), glm::vec3(1.0f, 0.0f, 0.0f));
+  transformation = glm::rotate(transformation, glm::radians(rotationZYX.x), glm::vec3(0.0f, 0.0f, 1.0f));
+  transformation = glm::rotate(transformation, glm::radians(rotationZYX.y), glm::vec3(0.0f, 1.0f, 0.0f));
+  transformation = glm::rotate(transformation, glm::radians(rotationZYX.z), glm::vec3(1.0f, 0.0f, 0.0f));
   transformation = glm::scale(transformation, scale);
 
   VkBuffer vertexBuffersArray[] = {renderer->bufferManager.vertexBuffers[id]};
@@ -97,5 +104,188 @@ void GameObject::loadModel(const std::string MODEL_PATH)
       vertices.push_back(vertex);
       indices.push_back(indices.size());
     }
+  }
+}
+
+void GameObject::initPhysics(btDiscreteDynamicsWorld *dynamicsWorld)
+{
+  if (config.collider == ColliderType::None)
+  {
+    return;
+  }
+
+  if (config.collider == ColliderType::Box && config.boxColliderSize == glm::vec3(-1))
+  {
+
+    glm::vec3 minCorner(std::numeric_limits<float>::max());
+    glm::vec3 maxCorner(std::numeric_limits<float>::lowest());
+
+    for (const auto &vertex : vertices)
+    {
+      glm::vec3 scaledVertex = vertex.pos * scale;
+      minCorner = glm::min(minCorner, scaledVertex);
+      maxCorner = glm::max(maxCorner, scaledVertex);
+    }
+
+    glm::vec3 size = maxCorner - minCorner;
+
+    collisionShape = new btBoxShape(btVector3(size.x * 0.5f, size.y * 0.5f, size.z * 0.5f));
+  }
+  else if (config.collider == ColliderType::Mesh)
+  {
+    btTriangleMesh *triangleMesh = new btTriangleMesh();
+    for (size_t i = 0; i < indices.size(); i += 3)
+    {
+      glm::vec3 v0 = vertices[indices[i]].pos * scale;
+      glm::vec3 v1 = vertices[indices[i + 1]].pos * scale;
+      glm::vec3 v2 = vertices[indices[i + 2]].pos * scale;
+
+      triangleMesh->addTriangle(btVector3(v0.x, v0.y, v0.z), btVector3(v1.x, v1.y, v1.z), btVector3(v2.x, v2.y, v2.z));
+    }
+    collisionShape = new btBvhTriangleMeshShape(triangleMesh, true);
+
+    btCompoundShape *compoundShape = new btCompoundShape();
+    btTransform localTransform;
+    localTransform.setIdentity();
+    compoundShape->addChildShape(localTransform, collisionShape);
+
+    collisionShape = compoundShape;
+  }
+  else
+  {
+    collisionShape = new btBoxShape(btVector3(config.boxColliderSize.x, config.boxColliderSize.y, config.boxColliderSize.z));
+  }
+
+  if (!config.isRigidBody)
+  {
+    btTransform transform;
+    transform.setIdentity();
+    transform.setOrigin(btVector3(pos.x, pos.y, pos.z));
+    collisionObject = new btCollisionObject();
+    collisionObject->setCollisionShape(collisionShape);
+
+    if (config.interactable == false)
+    {
+      collisionObject->setCollisionFlags(btCollisionObject::CF_NO_CONTACT_RESPONSE);
+    }
+
+    collisionObject->setWorldTransform(transform);
+
+    dynamicsWorld->addCollisionObject(collisionObject);
+    return;
+  }
+
+  btTransform initialTransform;
+  initialTransform.setIdentity();
+  initialTransform.setOrigin(btVector3(pos.x, pos.y, pos.z));
+  initialTransform.setRotation(btQuaternion(glm::radians(rotationZYX.z), glm::radians(rotationZYX.y), glm::radians(rotationZYX.x)));
+  motionState = new btDefaultMotionState(initialTransform);
+
+  btVector3 inertia(0, 0, 0);
+  collisionShape->calculateLocalInertia(mass, inertia);
+
+  btRigidBody::btRigidBodyConstructionInfo rigidBodyCI(mass, motionState, collisionShape, inertia);
+  rigidBody = new btRigidBody(rigidBodyCI);
+
+  int flags = rigidBody->getFlags();
+  if (!config.canMove)
+  {
+    rigidBody->setMassProps(0, btVector3(0, 0, 0));
+  }
+  else
+  {
+    rigidBody->setMassProps(mass, inertia);
+  }
+
+  if (!config.canRotateX || !config.canRotateY || !config.canRotateZ)
+  {
+    btVector3 angularFactor(1, 1, 1);
+    if (!config.canRotateX)
+      angularFactor.setX(0);
+    if (!config.canRotateY)
+      angularFactor.setY(0);
+    if (!config.canRotateZ)
+      angularFactor.setZ(0);
+    rigidBody->setAngularFactor(angularFactor);
+  }
+
+  if (config.interactable == false)
+  {
+    rigidBody->setCollisionFlags(btCollisionObject::CF_NO_CONTACT_RESPONSE);
+  }
+
+  dynamicsWorld->addRigidBody(rigidBody);
+}
+
+void GameObject::updatePhysics()
+{
+  if (config.collider == ColliderType::None)
+  {
+    return;
+  }
+
+  if (rigidBody && rigidBody->getMotionState())
+  {
+    btTransform transform;
+    rigidBody->getMotionState()->getWorldTransform(transform);
+
+    pos.x = transform.getOrigin().getX();
+    pos.y = transform.getOrigin().getY();
+    pos.z = transform.getOrigin().getZ();
+
+    if (config.canRotateX || config.canRotateY || config.canRotateZ)
+    {
+      btQuaternion rotation = transform.getRotation();
+      btVector3 eulerAngles;
+      rotation.getEulerZYX(eulerAngles[0], eulerAngles[1], eulerAngles[2]);
+
+      if (config.canRotateZ)
+        rotationZYX.x = glm::degrees(eulerAngles[0]);
+      if (config.canRotateY)
+        rotationZYX.y = glm::degrees(eulerAngles[1]);
+      if (config.canRotateX)
+        rotationZYX.z = glm::degrees(eulerAngles[2]);
+    }
+  }
+  else if (collisionObject)
+  {
+    const btTransform &transform = collisionObject->getWorldTransform();
+    pos.x = transform.getOrigin().getX();
+    pos.y = transform.getOrigin().getY();
+    pos.z = transform.getOrigin().getZ();
+  }
+}
+
+void GameObject::cleanupPhysics(btDiscreteDynamicsWorld *dynamicsWorld)
+{
+  if (config.collider == ColliderType::None)
+  {
+    return;
+  }
+
+  if (rigidBody)
+  {
+    dynamicsWorld->removeRigidBody(rigidBody);
+    delete rigidBody;
+    rigidBody = nullptr;
+  }
+
+  if (motionState)
+  {
+    delete motionState;
+    motionState = nullptr;
+  }
+
+  if (collisionObject)
+  {
+    dynamicsWorld->removeCollisionObject(collisionObject);
+    delete collisionObject;
+    collisionObject = nullptr;
+  }
+
+  if (collisionShape)
+  {
+    delete collisionShape;
+    collisionShape = nullptr;
   }
 }

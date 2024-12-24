@@ -1,4 +1,6 @@
 #include "renderer.hpp"
+#include <btBulletDynamicsCommon.h>
+#include "gameObjectPhysicsConfig.hpp"
 const std::vector<Vertex> cubeVertices = {
     {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 0
     {{0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},  // 1
@@ -66,15 +68,49 @@ public:
     initWindow();
     renderer.initVulkan();
 
-    objects.emplace(0, GameObject(renderer, 0, glm::vec3(0, 10, 0), glm::vec3(0.1, 0.1, 0.1), 0, 0, {}, {}));
-    objects.emplace(1, GameObject(renderer, 1, glm::vec3(0, 5.5, 0), glm::vec3(50, 2, 50), 0, 0, cubeVertices, cubeIndices));
+    PhysicsConfig config0;
+    config0.collider = ColliderType::Mesh;
+    config0.isRigidBody = true;
+
+    PhysicsConfig config1;
+    config1.collider = ColliderType::Box;
+    config1.isRigidBody = true;
+    config1.canMove = false;
+    config1.canRotateX = false;
+    config1.canRotateY = false;
+    config1.canRotateZ = false;
+
+    PhysicsConfig config2;
+    config2.collider = ColliderType::Box;
+    config2.isRigidBody = true;
+
+    PhysicsConfig config3;
+    config3.collider = ColliderType::Box;
+    config3.isRigidBody = true;
+
+    PhysicsConfig config4;
+    config4.collider = ColliderType::Box;
+    config4.interactable = false;
+
+    objects.emplace(0, GameObject(renderer, 0, config0, glm::vec3(0, 20, 0), glm::vec3(0.1, 0.1, 0.1), glm::vec3(10, 40, 50), 74, {}, {}));
+    objects.emplace(1, GameObject(renderer, 1, config1, glm::vec3(0, 0, 0), glm::vec3(50, 2, 50), glm::vec3(0, 0, 0), 0, cubeVertices, cubeIndices));
+    objects.emplace(2, GameObject(renderer, 2, config2, glm::vec3(0, 30, 0), glm::vec3(1, 1, 1), glm::vec3(0, 30, 45), 1, cubeVertices, cubeIndices));
+    objects.emplace(3, GameObject(renderer, 3, config3, glm::vec3(5.1, 15, 0), glm::vec3(2, 1, 1), glm::vec3(0, 10, 45), 1, cubeVertices, cubeIndices));
+
+    objects.emplace(4, GameObject(renderer, 4, config4, glm::vec3(5, 5, 0), glm::vec3(2, 2, 2), glm::vec3(0, 0, 0), 1, cubeVertices, cubeIndices));
 
     objects.at(0).loadModel("models/couch1.obj");
-    objects.at(0).initGraphics(renderer, renderer.couchTextureManager);
-    objects.at(1).initGraphics(renderer, renderer.textureManager);
+    objects.at(0).initGraphics(renderer, "models/gray.png");
+    objects.at(1).initGraphics(renderer, "textures/wood.png");
+    objects.at(2).initGraphics(renderer, "textures/metal.png");
+    objects.at(3).initGraphics(renderer, "textures/wall.png");
+    objects.at(4).initGraphics(renderer, "textures/wood.png");
 
     renderer.drawObjects.emplace(0, &objects.at(0));
     renderer.drawObjects.emplace(1, &objects.at(1));
+    renderer.drawObjects.emplace(2, &objects.at(2));
+    renderer.drawObjects.emplace(3, &objects.at(3));
+    renderer.drawObjects.emplace(4, &objects.at(4));
     mainLoop();
     renderer.cleanup();
   }
@@ -132,6 +168,18 @@ public:
   void mainLoop()
   {
     initFPSCounter();
+    btBroadphaseInterface *broadphase = new btDbvtBroadphase();
+    btDefaultCollisionConfiguration *collisionConfiguration = new btDefaultCollisionConfiguration();
+    btCollisionDispatcher *dispatcher = new btCollisionDispatcher(collisionConfiguration);
+    btSequentialImpulseConstraintSolver *solver = new btSequentialImpulseConstraintSolver();
+    btDiscreteDynamicsWorld *dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
+    dynamicsWorld->setGravity(btVector3(0, -9.81f, 0));
+
+    for (auto &gameObject : objects)
+    {
+      gameObject.second.initPhysics(dynamicsWorld);
+    }
+
     while (!glfwWindowShouldClose(renderer.window))
     {
       float currentFrame = static_cast<float>(glfwGetTime());
@@ -140,19 +188,29 @@ public:
 
       float time = glfwGetTime();
 
-      float oscillationY = 2.0f * sin(time * 2);
-      float oscillationX = 2.0f * cos(time);
-      float oscillationZ = 2.0f * sin(time * 2) * cos(time);
+      dynamicsWorld->stepSimulation(deltaTime);
 
-      objects.at(0).pos.y = 10.0f + oscillationY;
-      objects.at(0).pos.x = oscillationX;
-      objects.at(0).pos.z = oscillationZ;
+      for (auto &gameObject : objects)
+      {
+        gameObject.second.updatePhysics();
+      }
+
       processInput();
       glfwPollEvents();
       renderer.drawFrame();
       updateFPSCounter();
     }
 
+    for (auto &gameObject : objects)
+    {
+      gameObject.second.cleanupPhysics(dynamicsWorld);
+      gameObject.second.textureManager.cleanup(renderer.deviceManager.device);
+    }
+    delete dynamicsWorld;
+    delete solver;
+    delete dispatcher;
+    delete collisionConfiguration;
+    delete broadphase;
     vkDeviceWaitIdle(renderer.deviceManager.device);
   }
 
@@ -185,11 +243,11 @@ public:
     std::chrono::duration<float> elapsed = currentTime - lastTime;
 
     if (elapsed.count() >= 1.0f)
-    { // If 1 second has passed
+    {
       float fps = frameCount / elapsed.count();
-      std::cout << "FPS: " << fps << std::endl; // Output FPS
-      frameCount = 0;                           // Reset frame counter
-      lastTime = currentTime;                   // Reset timing
+      std::cout << "FPS: " << fps << std::endl;
+      frameCount = 0;
+      lastTime = currentTime;
     }
   }
 };

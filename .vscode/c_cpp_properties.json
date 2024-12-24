@@ -6,7 +6,8 @@
                 "${workspaceFolder}/**",
                 "C:/msys64/mingw64/include",
                 "C:/VulkanSDK/1.3.290.0/Include",
-                "${workspaceFolder}/External"
+                "${workspaceFolder}/External",
+                "C:/msys64/mingw64/include/bullet"
             ],
             "compilerPath": "C:/msys64/usr/bin/gcc.exe",
             "cStandard": "${default}",

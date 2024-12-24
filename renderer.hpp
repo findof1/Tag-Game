@@ -21,7 +21,6 @@
 class Camera;
 class SwapchainManager;
 class BufferManager;
-class TextureManager;
 class DescriptorManager;
 class PipelineManager;
 class DeviceManager;
@@ -53,8 +52,6 @@ public:
 
   SwapchainManager swapchainManager;
   BufferManager bufferManager;
-  TextureManager textureManager;
-  TextureManager couchTextureManager;
   DescriptorManager descriptorManager;
   PipelineManager pipelineManager;
   DeviceManager deviceManager;
