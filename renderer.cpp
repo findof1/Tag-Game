@@ -3,9 +3,8 @@
 #include "renderer.hpp"
 #include "utils.h"
 #include <cstring>
-#include "playerCamera.h"
 
-Renderer::Renderer(PlayerCamera &camera, uint32_t &WIDTH, uint32_t &HEIGHT)
+Renderer::Renderer(Camera &camera, uint32_t &WIDTH, uint32_t &HEIGHT)
     : bufferManager(), swapchainManager(), deviceManager(swapchainManager), descriptorManager(bufferManager), pipelineManager(swapchainManager, descriptorManager), camera(camera), WIDTH(WIDTH), HEIGHT(HEIGHT)
 {
 }

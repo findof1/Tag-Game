@@ -18,7 +18,7 @@
 #include "bufferManager.hpp"
 #include "vertex.h"
 
-class PlayerCamera;
+class Camera;
 class SwapchainManager;
 class BufferManager;
 class DescriptorManager;
@@ -43,9 +43,9 @@ public:
 
   void initVulkan();
 
-  Renderer(PlayerCamera &camera, uint32_t &WIDTH, uint32_t &HEIGHT);
+  Renderer(Camera &camera, uint32_t &WIDTH, uint32_t &HEIGHT);
 
-  PlayerCamera &camera;
+  Camera &camera;
   VkInstance instance;
   VkQueue graphicsQueue;
   VkQueue presentQueue;

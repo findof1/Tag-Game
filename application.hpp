@@ -1,7 +1,7 @@
 #include "renderer.hpp"
 #include <btBulletDynamicsCommon.h>
 #include "gameObjectPhysicsConfig.hpp"
-#include "playerCamera.h"
+#include "camera.h"
 const std::vector<Vertex> cubeVertices = {
     {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 0
     {{0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},  // 1
@@ -55,7 +55,6 @@ class Application
 public:
   Renderer renderer;
   Camera camera;
-  PlayerCamera playerCamera;
   GLFWwindow *window;
 
   uint32_t WIDTH = 1600;
@@ -69,7 +68,7 @@ public:
   float lastFrame = 0.0f;
   std::unordered_map<int, GameObject> objects;
 
-  Application() : camera(), playerCamera(), renderer(playerCamera, WIDTH, HEIGHT)
+  Application() : camera(), renderer(camera, WIDTH, HEIGHT)
   {
   }
 
@@ -103,7 +102,7 @@ public:
     config4.interactable = false;
 
     PhysicsConfig config5;
-    config4.collider = ColliderType::None;
+    config5.collider = ColliderType::None;
 
     objects.emplace(0, GameObject(renderer, 0, config0, glm::vec3(0, 20, 0), glm::vec3(0.1, 0.1, 0.1), glm::vec3(10, 40, 50), 74, {}, {}));
     objects.emplace(1, GameObject(renderer, 1, config1, glm::vec3(0, 0, 0), glm::vec3(50, 2, 50), glm::vec3(0, 0, 0), 0, cubeVertices, cubeIndices));
@@ -168,7 +167,7 @@ public:
     app->lastX = xpos;
     app->lastY = ypos;
 
-    app->playerCamera.ProcessMouseMovement(xoffset, yoffset);
+    app->camera.ProcessMouseMovement(xoffset, yoffset);
   }
 
   static void framebufferResizeCallback(GLFWwindow *window, int width, int height)
@@ -179,7 +178,7 @@ public:
   static void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
   {
     auto app = reinterpret_cast<Application *>(glfwGetWindowUserPointer(window));
-    app->playerCamera.ProcessMouseScroll(static_cast<float>(yoffset));
+    app->camera.ProcessMouseScroll(static_cast<float>(yoffset));
   }
 
   void mainLoop()
@@ -239,13 +238,13 @@ public:
     float cameraSpeed = 20.0f * deltaTime;
 
     if (glfwGetKey(renderer.window, GLFW_KEY_W) == GLFW_PRESS)
-      playerCamera.ProcessKeyboard(FORWARD, deltaTime);
+      camera.ProcessKeyboard(FORWARD, deltaTime);
     if (glfwGetKey(renderer.window, GLFW_KEY_S) == GLFW_PRESS)
-      playerCamera.ProcessKeyboard(BACKWARD, deltaTime);
+      camera.ProcessKeyboard(BACKWARD, deltaTime);
     if (glfwGetKey(renderer.window, GLFW_KEY_A) == GLFW_PRESS)
-      playerCamera.ProcessKeyboard(LEFT, deltaTime);
+      camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(renderer.window, GLFW_KEY_D) == GLFW_PRESS)
-      playerCamera.ProcessKeyboard(RIGHT, deltaTime);
+      camera.ProcessKeyboard(RIGHT, deltaTime);
   }
 
   void initFPSCounter()

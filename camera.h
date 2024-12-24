@@ -12,6 +12,12 @@ enum Camera_Movement
   RIGHT,
 };
 
+enum Camera_Types
+{
+  FlyCam,
+  FirstPerson
+};
+
 const float YAW = -90.0f;
 const float PITCH = 0.0f;
 const float SPEED = 20.0f;
@@ -34,19 +40,12 @@ public:
   float MouseSensitivity;
   float Zoom;
 
-  Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), float yaw = YAW, float pitch = PITCH) : Front(glm::vec3(0.0f, 0.0f, -1.0f)), MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY), Zoom(ZOOM)
+  Camera_Types type;
+
+  Camera(Camera_Types type = Camera_Types::FlyCam, glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), float yaw = YAW, float pitch = PITCH) : Front(glm::vec3(0.0f, 0.0f, -1.0f)), MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY), Zoom(ZOOM), type(type)
   {
     Position = position;
     WorldUp = up;
-    Yaw = yaw;
-    Pitch = pitch;
-    updateCameraVectors();
-  }
-
-  Camera(float posX, float posY, float posZ, float upX, float upY, float upZ, float yaw, float pitch) : Front(glm::vec3(0.0f, 0.0f, -1.0f)), MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY), Zoom(ZOOM)
-  {
-    Position = glm::vec3(posX, posY, posZ);
-    WorldUp = glm::vec3(upX, upY, upZ);
     Yaw = yaw;
     Pitch = pitch;
     updateCameraVectors();
@@ -60,14 +59,29 @@ public:
   void ProcessKeyboard(Camera_Movement direction, float deltaTime)
   {
     float velocity = MovementSpeed * deltaTime;
-    if (direction == FORWARD)
-      Position += Front * velocity;
-    if (direction == BACKWARD)
-      Position -= Front * velocity;
-    if (direction == LEFT)
-      Position -= Right * velocity;
-    if (direction == RIGHT)
-      Position += Right * velocity;
+    if (type == FlyCam)
+    {
+      if (direction == FORWARD)
+        Position += Front * velocity;
+      if (direction == BACKWARD)
+        Position -= Front * velocity;
+      if (direction == LEFT)
+        Position -= Right * velocity;
+      if (direction == RIGHT)
+        Position += Right * velocity;
+    }
+    if (type == FirstPerson)
+    {
+      glm::vec3 forward = glm::normalize(glm::vec3(Front.x, 0.0f, Front.z));
+      if (direction == FORWARD)
+        Position += forward * velocity;
+      if (direction == BACKWARD)
+        Position -= forward * velocity;
+      if (direction == LEFT)
+        Position -= Right * velocity;
+      if (direction == RIGHT)
+        Position += Right * velocity;
+    }
   }
 
   void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true)
