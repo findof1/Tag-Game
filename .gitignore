@@ -1,5 +1,7 @@
 External
 main.exe
+./main.exe
+*.exe
 bin
 *.zip
 .vscode
