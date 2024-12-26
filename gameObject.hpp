@@ -8,6 +8,14 @@
 class Renderer;
 class TextureManager;
 struct PhysicsConfig;
+
+enum class GameObjectTags
+{
+  None,
+  Ground,
+  Player
+};
+
 class GameObject
 {
 public:
@@ -21,10 +29,10 @@ public:
   btCollisionObject *collisionObject = nullptr;
   btMotionState *motionState = nullptr;
   btRigidBody *rigidBody = nullptr;
-  btScalar mass;
   TextureManager textureManager;
+  GameObjectTags tag;
 
-  GameObject(Renderer &renderer, int id, PhysicsConfig &config, const glm::vec3 &pos, const glm::vec3 &scale, const glm::vec3 &rotationZYX, btScalar mass, std::vector<Vertex> vertices, std::vector<uint32_t> indices);
+  GameObject(Renderer &renderer, int id, PhysicsConfig &config, const glm::vec3 &pos, const glm::vec3 &scale, const glm::vec3 &rotationZYX, std::vector<Vertex> vertices, std::vector<uint32_t> indices, GameObjectTags tag = GameObjectTags::None);
   ~GameObject() {}
 
   void draw(Renderer *renderer, int currentFrame, glm::mat4 view, glm::mat4 projectionMatrix, VkCommandBuffer commandBuffer);

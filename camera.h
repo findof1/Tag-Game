@@ -3,6 +3,8 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <btBulletDynamicsCommon.h>
+#include "gameObject.hpp"
 
 enum Camera_Movement
 {
@@ -70,17 +72,83 @@ public:
       if (direction == RIGHT)
         Position += Right * velocity;
     }
+  }
+
+  void ProcessKeyboard(GLFWwindow *window, float deltaTime, GameObject &player, btDynamicsWorld *dynamicsWorld)
+  {
+    MovementSpeed = SPEED;
+    float velocity = MovementSpeed * deltaTime;
+    if (type == FlyCam)
+    {
+      if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        Position += Front * velocity;
+      if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        Position -= Front * velocity;
+      if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        Position -= Right * velocity;
+      if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        Position += Right * velocity;
+    }
     if (type == FirstPerson)
     {
-      glm::vec3 forward = glm::normalize(glm::vec3(Front.x, 0.0f, Front.z));
-      if (direction == FORWARD)
-        Position += forward * velocity;
-      if (direction == BACKWARD)
-        Position -= forward * velocity;
-      if (direction == LEFT)
-        Position -= Right * velocity;
-      if (direction == RIGHT)
-        Position += Right * velocity;
+      if (player.rigidBody)
+      {
+        MovementSpeed = 100 * player.rigidBody->getMass();
+        float velocity = MovementSpeed;
+        btVector3 force(0, 0, 0);
+
+        glm::vec3 forward = glm::normalize(glm::vec3(Front.x, 0.0f, Front.z));
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+          force += btVector3(forward.x, 0.0f, forward.z);
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+          force -= btVector3(forward.x, 0.0f, forward.z);
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+          force -= btVector3(Right.x, 0.0f, Right.z);
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+          force += btVector3(Right.x, 0.0f, Right.z);
+
+        if (force == btVector3(0, 0, 0))
+        {
+          return;
+        }
+
+        force = force.normalize() * velocity;
+
+        float playerHeight = 3.0f;
+        btVector3 feetPosition = player.rigidBody->getCenterOfMassPosition() - btVector3(0, playerHeight / 2, 0);
+        btVector3 headPosition = player.rigidBody->getCenterOfMassPosition() + btVector3(0, playerHeight / 2, 0);
+
+        bool hasHit = false;
+        for (float i = feetPosition.getY(); i <= headPosition.getY(); i += 1.f)
+        {
+          btVector3 position(feetPosition.getX(), i, feetPosition.getZ());
+          btCollisionWorld::ClosestRayResultCallback rayCallback(position, position + force.normalized());
+          dynamicsWorld->rayTest(position, position + force.normalized(), rayCallback);
+          if (rayCallback.hasHit())
+          {
+            const btRigidBody *rigidBody = dynamic_cast<const btRigidBody *>(rayCallback.m_collisionObject);
+            if (rigidBody)
+            {
+              btScalar mass = rigidBody->getMass();
+              if (mass == 0)
+              {
+                hasHit = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!hasHit)
+        {
+          player.rigidBody->applyCentralForce(force);
+          player.rigidBody->activate();
+        }
+      }
+      else
+      {
+        std::cerr << "No GameObject passed to camera's ProcessKeyboard" << std::endl;
+      }
     }
   }
 

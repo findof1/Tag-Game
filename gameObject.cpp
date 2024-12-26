@@ -8,7 +8,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include "gameObjectPhysicsConfig.hpp"
 
-GameObject::GameObject(Renderer &renderer, int id, PhysicsConfig &config, const glm::vec3 &pos, const glm::vec3 &scale, const glm::vec3 &rotationZYX, btScalar mass, std::vector<Vertex> vertices, std::vector<uint32_t> indices) : id(id), config(config), pos(pos), scale(scale), rotationZYX(rotationZYX), vertices(vertices), indices(indices), mass(mass), textureManager(renderer.bufferManager)
+GameObject::GameObject(Renderer &renderer, int id, PhysicsConfig &config, const glm::vec3 &pos, const glm::vec3 &scale, const glm::vec3 &rotationZYX, std::vector<Vertex> vertices, std::vector<uint32_t> indices, GameObjectTags tag) : id(id), config(config), pos(pos), scale(scale), rotationZYX(rotationZYX), vertices(vertices), indices(indices), textureManager(renderer.bufferManager), tag(tag)
 {
 }
 
@@ -182,9 +182,9 @@ void GameObject::initPhysics(btDiscreteDynamicsWorld *dynamicsWorld)
   motionState = new btDefaultMotionState(initialTransform);
 
   btVector3 inertia(0, 0, 0);
-  collisionShape->calculateLocalInertia(mass, inertia);
+  collisionShape->calculateLocalInertia(config.mass, inertia);
 
-  btRigidBody::btRigidBodyConstructionInfo rigidBodyCI(mass, motionState, collisionShape, inertia);
+  btRigidBody::btRigidBodyConstructionInfo rigidBodyCI(config.mass, motionState, collisionShape, inertia);
   rigidBody = new btRigidBody(rigidBodyCI);
 
   int flags = rigidBody->getFlags();
@@ -194,7 +194,7 @@ void GameObject::initPhysics(btDiscreteDynamicsWorld *dynamicsWorld)
   }
   else
   {
-    rigidBody->setMassProps(mass, inertia);
+    rigidBody->setMassProps(config.mass, inertia);
   }
 
   if (!config.canRotateX || !config.canRotateY || !config.canRotateZ)
@@ -213,6 +213,16 @@ void GameObject::initPhysics(btDiscreteDynamicsWorld *dynamicsWorld)
   {
     rigidBody->setCollisionFlags(btCollisionObject::CF_NO_CONTACT_RESPONSE);
   }
+
+  rigidBody->setGravity(btVector3(0, -20.f, 0));
+
+  rigidBody->setFriction(config.friction);
+
+  rigidBody->setDamping(config.linearDamping, config.angularDamping);
+
+  rigidBody->setUserPointer((void *)this);
+
+  rigidBody->activate();
 
   dynamicsWorld->addRigidBody(rigidBody);
 }
