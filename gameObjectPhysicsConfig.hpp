@@ -20,8 +20,10 @@ struct PhysicsConfig
   bool canRotateZ = true;
   float mass = 1;
   float friction = 0.5;
+  float restitution = 0.0;
   float linearDamping = 0.0;
   float angularDamping = 0.0;
+  float meshColliderMargin = 0.04;
   glm::vec3 boxColliderSize;
   PhysicsConfig() : boxColliderSize(-1) {}
 };

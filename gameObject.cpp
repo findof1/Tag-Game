@@ -150,6 +150,7 @@ void GameObject::initPhysics(btDiscreteDynamicsWorld *dynamicsWorld)
     compoundShape->addChildShape(localTransform, collisionShape);
 
     collisionShape = compoundShape;
+    collisionShape->setMargin(config.meshColliderMargin);
   }
   else
   {
@@ -219,6 +220,8 @@ void GameObject::initPhysics(btDiscreteDynamicsWorld *dynamicsWorld)
   rigidBody->setFriction(config.friction);
 
   rigidBody->setDamping(config.linearDamping, config.angularDamping);
+
+  rigidBody->setRestitution(config.restitution);
 
   rigidBody->setUserPointer((void *)this);
 

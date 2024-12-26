@@ -63,6 +63,7 @@ public:
   uint32_t WIDTH = 1600;
   uint32_t HEIGHT = 1200;
   bool spacePressed = false;
+  bool grounded;
 
   std::chrono::high_resolution_clock::time_point lastTime;
   int frameCount = 0;
@@ -97,6 +98,7 @@ public:
     config1.canRotateZ = false;
     config1.friction = 2;
     config1.mass = 0;
+    config1.restitution = 0.1;
 
     PhysicsConfig config2;
     config2.collider = ColliderType::Box;
@@ -126,8 +128,21 @@ public:
     config6.friction = 0.8;
     config6.linearDamping = 0.1;
     config6.mass = 30;
+    config6.restitution = 0.8;
 
-    objects.emplace(0, GameObject(renderer, 0, config0, glm::vec3(0, 20, 0), glm::vec3(0.1, 0.1, 0.1), glm::vec3(10, 40, 50), {}, {}));
+    PhysicsConfig config7;
+    config7.collider = ColliderType::Mesh;
+    config7.isRigidBody = true;
+    config7.canMove = false;
+    config7.canRotateX = false;
+    config7.canRotateY = false;
+    config7.canRotateZ = false;
+    config7.friction = 2;
+    config7.mass = 0;
+    config7.meshColliderMargin = 0.5;
+    config7.restitution = 0.1;
+
+    objects.emplace(0, GameObject(renderer, 0, config0, glm::vec3(0, 5, 0), glm::vec3(0.1, 0.1, 0.1), glm::vec3(10, 40, 50), {}, {}));
     objects.emplace(1, GameObject(renderer, 1, config1, glm::vec3(0, 0, 0), glm::vec3(50, 2, 50), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::Ground));
     objects.emplace(2, GameObject(renderer, 2, config2, glm::vec3(0, 30, 0), glm::vec3(1, 1, 1), glm::vec3(0, 30, 45), cubeVertices, cubeIndices));
     objects.emplace(3, GameObject(renderer, 3, config3, glm::vec3(5.1, 15, 0), glm::vec3(2, 1, 1), glm::vec3(0, 10, 45), cubeVertices, cubeIndices));
@@ -138,14 +153,20 @@ public:
 
     objects.emplace(6, GameObject(renderer, 6, config6, glm::vec3(-5, 5, 0), glm::vec3(1, 3, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::Player));
 
-    objects.at(0).loadModel("models/couch1.obj");
-    objects.at(0).initGraphics(renderer, "models/gray.png");
+    objects.emplace(7, GameObject(renderer, 7, config7, glm::vec3(0, -50, 0), glm::vec3(50, 50, 50), glm::vec3(0, 0, 0), {}, {}, GameObjectTags::Ground));
+
+    objects.at(0).loadModel("models/couch/couch1.obj");
+    objects.at(0).initGraphics(renderer, "models/couch/gray.png");
+
     objects.at(1).initGraphics(renderer, "textures/wood.png");
     objects.at(2).initGraphics(renderer, "textures/metal.png");
     objects.at(3).initGraphics(renderer, "textures/wall.png");
     objects.at(4).initGraphics(renderer, "textures/wood.png");
     objects.at(5).initGraphics(renderer, "textures/sky.png");
     objects.at(6).initGraphics(renderer, "textures/wall.png");
+
+    objects.at(7).loadModel("models/testMap/testMap.obj");
+    objects.at(7).initGraphics(renderer, "textures/concrete.png");
 
     renderer.drawObjects.emplace(0, &objects.at(0));
     renderer.drawObjects.emplace(1, &objects.at(1));
@@ -154,6 +175,7 @@ public:
     renderer.drawObjects.emplace(4, &objects.at(4));
     renderer.drawObjects.emplace(5, &objects.at(5));
     renderer.drawObjects.emplace(6, &objects.at(6));
+    renderer.drawObjects.emplace(7, &objects.at(7));
     mainLoop();
     renderer.cleanup();
   }
@@ -232,6 +254,8 @@ public:
       float time = glfwGetTime();
 
       dynamicsWorld->stepSimulation(deltaTime, 10);
+
+      grounded = isPlayerGrounded(objects.at(6), dynamicsWorld);
 
       for (auto &gameObject : objects)
       {
@@ -314,7 +338,6 @@ public:
 
     if (glfwGetKey(renderer.window, GLFW_KEY_SPACE) == GLFW_PRESS && !spacePressed)
     {
-      bool grounded = isPlayerGrounded(player, dynamicsWorld);
       if (grounded)
       {
         btVector3 force(0, 500, 0);
