@@ -119,7 +119,7 @@ public:
         btVector3 headPosition = player.rigidBody->getCenterOfMassPosition() + btVector3(0, playerHeight / 2, 0);
 
         bool hasHit = false;
-        for (float i = feetPosition.getY(); i <= headPosition.getY(); i += 1.f)
+        for (float i = feetPosition.getY() + 0.01; i <= headPosition.getY() + 0.01; i += 1.f)
         {
           btVector3 position(feetPosition.getX(), i, feetPosition.getZ());
           btCollisionWorld::ClosestRayResultCallback rayCallback(position, position + force.normalized());

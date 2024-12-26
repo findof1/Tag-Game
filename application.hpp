@@ -2,8 +2,10 @@
 #include <btBulletDynamicsCommon.h>
 #include "gameObjectPhysicsConfig.hpp"
 #include "camera.h"
+#include <chrono>
 
 #define DEFAULT_DAMPING_FACTOR 10
+#define DEFAULT_MAX_SPEED 12.0f
 
 const std::vector<Vertex> cubeVertices = {
     {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 0
@@ -63,6 +65,7 @@ public:
   uint32_t WIDTH = 1600;
   uint32_t HEIGHT = 1200;
   bool spacePressed = false;
+  bool shiftPressed = false;
   bool grounded;
 
   std::chrono::high_resolution_clock::time_point lastTime;
@@ -73,7 +76,13 @@ public:
   float lastFrame = 0.0f;
   std::unordered_map<int, GameObject> objects;
 
+  std::chrono::system_clock::time_point currentTime;
+  long lastUsedTime = 0;
+
   float dampingFactor = DEFAULT_DAMPING_FACTOR;
+  float maxSpeed = DEFAULT_MAX_SPEED;
+  float wallJumpCount;
+  float dashCount;
 
   Application() : camera(FirstPerson), renderer(camera, WIDTH, HEIGHT)
   {
@@ -244,6 +253,8 @@ public:
     {
       gameObject.second.initPhysics(dynamicsWorld);
     }
+    objects.at(6).rigidBody->setCcdMotionThreshold(0.5f);
+    objects.at(6).rigidBody->setCcdSweptSphereRadius(0.5f);
 
     while (!glfwWindowShouldClose(renderer.window))
     {
@@ -256,6 +267,18 @@ public:
       dynamicsWorld->stepSimulation(deltaTime, 10);
 
       grounded = isPlayerGrounded(objects.at(6), dynamicsWorld);
+
+      if (grounded)
+      {
+        wallJumpCount = 2;
+        currentTime = std::chrono::system_clock::now();
+        std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch());
+        long currentTimeInSeconds = duration.count();
+        if (currentTimeInSeconds - lastUsedTime >= 1)
+        {
+          dashCount = 1;
+        }
+      }
 
       for (auto &gameObject : objects)
       {
@@ -275,7 +298,6 @@ public:
         btVector3 horizontalVelocity(velocity.x(), 0.0f, velocity.z());
 
         float speed = horizontalVelocity.length();
-        float maxSpeed = 12.0f;
 
         if (speed > maxSpeed)
         {
@@ -342,6 +364,15 @@ public:
       {
         btVector3 force(0, 500, 0);
         player.rigidBody->applyImpulse(force, btVector3(0, 0, 0));
+        dashCount = 1;
+      }
+
+      if (wallJumpCount > 0 && isTouchingWall(player, dynamicsWorld))
+      {
+        btVector3 force(0, 500, 0);
+        player.rigidBody->applyImpulse(force, btVector3(0, 0, 0));
+        dashCount = 1;
+        wallJumpCount--;
       }
 
       spacePressed = true;
@@ -349,6 +380,24 @@ public:
     if (glfwGetKey(renderer.window, GLFW_KEY_SPACE) != GLFW_PRESS)
     {
       spacePressed = false;
+    }
+
+    if (glfwGetKey(renderer.window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS && !shiftPressed && dashCount > 0)
+    {
+      float velocity = 100 * player.rigidBody->getMass();
+      glm::vec3 forward = glm::normalize(glm::vec3(camera.Front.x, 0.0f, camera.Front.z));
+      player.rigidBody->applyImpulse(btVector3(forward.x, forward.y, forward.z) * velocity, btVector3(0, 0, 0));
+
+      currentTime = std::chrono::system_clock::now();
+      std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch());
+      long currentTimeInSeconds = duration.count();
+      lastUsedTime = currentTimeInSeconds;
+      dashCount--;
+      shiftPressed = true;
+    }
+    if (glfwGetKey(renderer.window, GLFW_KEY_LEFT_SHIFT) != GLFW_PRESS)
+    {
+      shiftPressed = false;
     }
   }
 
@@ -381,6 +430,51 @@ public:
     }
 
     return false;
+  }
+
+  bool isTouchingWall(GameObject &player, btDynamicsWorld *dynamicsWorld)
+  {
+
+    float playerHeight = 3.0f;
+    btVector3 feetPosition = player.rigidBody->getCenterOfMassPosition() - btVector3(0, playerHeight / 2, 0);
+    btVector3 headPosition = player.rigidBody->getCenterOfMassPosition() + btVector3(0, playerHeight / 2, 0);
+
+    std::vector<btVector3> directions = {
+        btVector3(1, 0, 0),
+        btVector3(-1, 0, 0),
+        btVector3(0, 0, 1),
+        btVector3(0, 0, -1)};
+
+    bool hasHit = false;
+    for (const btVector3 &dir : directions)
+    {
+      for (float i = feetPosition.getY() + 0.01; i <= headPosition.getY() + 0.01; i += 1.f)
+      {
+        btVector3 position(feetPosition.getX(), i, feetPosition.getZ());
+        btCollisionWorld::ClosestRayResultCallback rayCallback(position, position + dir);
+        dynamicsWorld->rayTest(position, position + dir, rayCallback);
+        if (rayCallback.hasHit())
+        {
+          const btRigidBody *rigidBody = dynamic_cast<const btRigidBody *>(rayCallback.m_collisionObject);
+          if (rigidBody)
+          {
+            btScalar mass = rigidBody->getMass();
+            if (mass == 0)
+            {
+              hasHit = true;
+              btVector3 wallNormal = rayCallback.m_hitNormalWorld;
+              btVector3 pushDirection = wallNormal.normalized();
+
+              btRigidBody *playerRigidBody = player.rigidBody;
+              playerRigidBody->setLinearVelocity(playerRigidBody->getLinearVelocity() + pushDirection * 10);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    return hasHit;
   }
 
   void initFPSCounter()
