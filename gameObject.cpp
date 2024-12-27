@@ -302,3 +302,62 @@ void GameObject::cleanupPhysics(btDiscreteDynamicsWorld *dynamicsWorld)
     collisionShape = nullptr;
   }
 }
+
+void GameObject::setScale(const glm::vec3 &newScale)
+{
+  scale = newScale;
+
+  if (config.collider != ColliderType::None && collisionShape)
+  {
+    if (config.collider == ColliderType::Box)
+    {
+      glm::vec3 minCorner(std::numeric_limits<float>::max());
+      glm::vec3 maxCorner(std::numeric_limits<float>::lowest());
+
+      for (const auto &vertex : vertices)
+      {
+        glm::vec3 scaledVertex = vertex.pos * scale;
+        minCorner = glm::min(minCorner, scaledVertex);
+        maxCorner = glm::max(maxCorner, scaledVertex);
+      }
+
+      glm::vec3 size = maxCorner - minCorner;
+
+      delete collisionShape;
+      collisionShape = new btBoxShape(btVector3(size.x * 0.5f, size.y * 0.5f, size.z * 0.5f));
+
+      if (rigidBody)
+      {
+        btVector3 inertia(0, 0, 0);
+        collisionShape->calculateLocalInertia(config.mass, inertia);
+        rigidBody->setCollisionShape(collisionShape);
+        rigidBody->setMassProps(config.mass, inertia);
+        rigidBody->activate();
+      }
+    }
+    else if (config.collider == ColliderType::Mesh)
+    {
+      btTriangleMesh *triangleMesh = new btTriangleMesh();
+      for (size_t i = 0; i < indices.size(); i += 3)
+      {
+        glm::vec3 v0 = vertices[indices[i]].pos * scale;
+        glm::vec3 v1 = vertices[indices[i + 1]].pos * scale;
+        glm::vec3 v2 = vertices[indices[i + 2]].pos * scale;
+
+        triangleMesh->addTriangle(btVector3(v0.x, v0.y, v0.z), btVector3(v1.x, v1.y, v1.z), btVector3(v2.x, v2.y, v2.z));
+      }
+
+      delete collisionShape;
+      collisionShape = new btBvhTriangleMeshShape(triangleMesh, true);
+
+      if (rigidBody)
+      {
+        btVector3 inertia(0, 0, 0);
+        collisionShape->calculateLocalInertia(config.mass, inertia);
+        rigidBody->setCollisionShape(collisionShape);
+        rigidBody->setMassProps(config.mass, inertia);
+        rigidBody->activate();
+      }
+    }
+  }
+}

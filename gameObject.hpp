@@ -44,6 +44,8 @@ public:
   void updatePhysics();
   void cleanupPhysics(btDiscreteDynamicsWorld *dynamicsWorld);
 
+  void setScale(const glm::vec3 &newScale);
+
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
 };

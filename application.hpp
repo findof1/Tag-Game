@@ -3,10 +3,19 @@
 #include "gameObjectPhysicsConfig.hpp"
 #include "camera.h"
 #include <chrono>
+#include <algorithm>
+#include <cmath>
 #include "playerCollisionCallback.hpp"
 
 #define DEFAULT_DAMPING_FACTOR 10
 #define DEFAULT_MAX_SPEED 12.0f
+
+enum MovementState
+{
+  Ground,
+  Air,
+  FallingFast
+};
 
 const std::vector<Vertex> cubeVertices = {
     {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 0
@@ -67,6 +76,7 @@ public:
   uint32_t HEIGHT = 1200;
   bool spacePressed = false;
   bool shiftPressed = false;
+  bool controlPressed = false;
   bool grounded;
 
   std::chrono::high_resolution_clock::time_point lastTime;
@@ -80,6 +90,7 @@ public:
   std::chrono::system_clock::time_point currentTime;
   long lastUsedTime = 0;
 
+  MovementState movementState = MovementState::Air;
   float dampingFactor = DEFAULT_DAMPING_FACTOR;
   float maxSpeed = DEFAULT_MAX_SPEED;
   float wallJumpCount;
@@ -149,7 +160,7 @@ public:
     config7.canRotateZ = false;
     config7.friction = 1;
     config7.mass = 0;
-    config7.meshColliderMargin = 0.04;
+    config7.meshColliderMargin = 0.5;
     config7.restitution = 0.1;
 
     objects.emplace(0, GameObject(renderer, 0, config0, glm::vec3(0, 5, 0), glm::vec3(0.1, 0.1, 0.1), glm::vec3(10, 40, 50), {}, {}));
@@ -272,6 +283,7 @@ public:
 
       if (grounded)
       {
+        movementState = MovementState::Ground;
         wallJumpCount = 2;
         currentTime = std::chrono::system_clock::now();
         std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch());
@@ -280,6 +292,10 @@ public:
         {
           dashCount = 1;
         }
+      }
+      else
+      {
+        movementState = MovementState::Air;
       }
 
       for (auto &gameObject : objects)
@@ -301,6 +317,10 @@ public:
 
         float speed = horizontalVelocity.length();
 
+        float zoomFactor = 1.0f + speed / (maxSpeed * 4);
+        float smoothSpeed = 10.0f;
+        camera.Zoom = zoomLerp(camera.Zoom, std::clamp(ZOOM * zoomFactor, 70.0f, 140.0f), smoothSpeed * deltaTime);
+
         if (speed > maxSpeed)
         {
           btVector3 excessVelocity = horizontalVelocity.normalized() * (speed - maxSpeed);
@@ -321,17 +341,41 @@ public:
       updateFPSCounter();
     }
 
-    for (auto &gameObject : objects)
-    {
-      gameObject.second.cleanupPhysics(dynamicsWorld);
-      gameObject.second.textureManager.cleanup(renderer.deviceManager.device);
-    }
     delete dynamicsWorld;
     delete solver;
     delete dispatcher;
     delete collisionConfiguration;
     delete broadphase;
     vkDeviceWaitIdle(renderer.deviceManager.device);
+
+    renderer.swapchainManager.cleanupDepthImages(renderer.deviceManager.device);
+    renderer.swapchainManager.cleanupSwapChain(renderer.deviceManager.device);
+
+    renderer.bufferManager.cleanup(renderer.deviceManager.device);
+
+    renderer.descriptorManager.cleanup(renderer.deviceManager.device);
+
+    renderer.pipelineManager.cleanup(renderer.deviceManager.device);
+
+    for (size_t i = 0; i < renderer.MAX_FRAMES_IN_FLIGHT; i++)
+    {
+      vkDestroySemaphore(renderer.deviceManager.device, renderer.renderFinishedSemaphores[i], nullptr);
+      vkDestroySemaphore(renderer.deviceManager.device, renderer.imageAvailableSemaphores[i], nullptr);
+      vkDestroyFence(renderer.deviceManager.device, renderer.inFlightFences[i], nullptr);
+    }
+
+    vkDestroyCommandPool(renderer.deviceManager.device, renderer.commandPool, nullptr);
+    for (auto &gameObject : objects)
+    {
+      gameObject.second.cleanupPhysics(dynamicsWorld);
+      gameObject.second.textureManager.cleanup(renderer.deviceManager.device);
+    }
+    renderer.cleanup();
+  }
+
+  float zoomLerp(float start, float end, float t)
+  {
+    return start + t * (end - start);
   }
 
   void processInput()
@@ -356,9 +400,94 @@ public:
     if (glfwGetKey(renderer.window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
       glfwSetWindowShouldClose(renderer.window, true);
 
+    if (glfwGetKey(renderer.window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS && controlPressed == false)
+    {
+      player.setScale(glm::vec3(player.scale.x, player.scale.y / 2, player.scale.z));
+    }
+    else if (glfwGetKey(renderer.window, GLFW_KEY_LEFT_CONTROL) != GLFW_PRESS && controlPressed == true)
+    {
+      player.setScale(glm::vec3(player.scale.x, player.scale.y * 2, player.scale.z));
+    }
+
+    if (glfwGetKey(renderer.window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+    {
+      movementState = MovementState::FallingFast;
+      if (!grounded)
+      {
+        btVector3 force(0, -3, 0);
+        player.rigidBody->applyImpulse(force, btVector3(0, 0, 0));
+      }
+      controlPressed = true;
+    }
+    else
+    {
+      controlPressed = false;
+    }
+
     float cameraSpeed = 20.0f * deltaTime;
 
-    camera.ProcessKeyboard(renderer.window, deltaTime, player, dynamicsWorld);
+    if (glfwGetKey(renderer.window, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(renderer.window, GLFW_KEY_S) == GLFW_PRESS || glfwGetKey(renderer.window, GLFW_KEY_A) == GLFW_PRESS || glfwGetKey(renderer.window, GLFW_KEY_D) == GLFW_PRESS)
+    {
+      float velocity = 100 * player.rigidBody->getMass();
+      if (movementState = MovementState::Air)
+      {
+        velocity = 80 * player.rigidBody->getMass();
+      }
+      if (movementState = MovementState::FallingFast)
+      {
+        currentTime = std::chrono::system_clock::now();
+        std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch());
+        long currentTimeInSeconds = duration.count();
+        if (currentTimeInSeconds - lastUsedTime >= 1)
+        {
+          velocity = 60 * player.rigidBody->getMass();
+        }
+      }
+      btVector3 force(0, 0, 0);
+
+      glm::vec3 forward = glm::normalize(glm::vec3(camera.Front.x, 0.0f, camera.Front.z));
+      if (glfwGetKey(renderer.window, GLFW_KEY_W) == GLFW_PRESS)
+        force += btVector3(forward.x, 0.0f, forward.z);
+      if (glfwGetKey(renderer.window, GLFW_KEY_S) == GLFW_PRESS)
+        force -= btVector3(forward.x, 0.0f, forward.z);
+      if (glfwGetKey(renderer.window, GLFW_KEY_A) == GLFW_PRESS)
+        force -= btVector3(camera.Right.x, 0.0f, camera.Right.z);
+      if (glfwGetKey(renderer.window, GLFW_KEY_D) == GLFW_PRESS)
+        force += btVector3(camera.Right.x, 0.0f, camera.Right.z);
+
+      force = force.normalize() * velocity;
+
+      float playerHeight = 3.0f;
+      btVector3 feetPosition = player.rigidBody->getCenterOfMassPosition() - btVector3(0, playerHeight / 2, 0);
+      btVector3 headPosition = player.rigidBody->getCenterOfMassPosition() + btVector3(0, playerHeight / 2, 0);
+
+      bool hasHit = false;
+      for (float i = feetPosition.getY() + 0.01; i <= headPosition.getY() + 0.01; i += 1.f)
+      {
+        btVector3 position(feetPosition.getX(), i, feetPosition.getZ());
+        btCollisionWorld::ClosestRayResultCallback rayCallback(position, position + force.normalized());
+        dynamicsWorld->rayTest(position, position + force.normalized(), rayCallback);
+        if (rayCallback.hasHit())
+        {
+          const btRigidBody *rigidBody = dynamic_cast<const btRigidBody *>(rayCallback.m_collisionObject);
+          if (rigidBody)
+          {
+            btScalar mass = rigidBody->getMass();
+            if (mass == 0)
+            {
+              hasHit = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!hasHit)
+      {
+        player.rigidBody->applyCentralForce(force);
+        player.rigidBody->activate();
+      }
+    }
 
     if (glfwGetKey(renderer.window, GLFW_KEY_SPACE) == GLFW_PRESS && !spacePressed)
     {
@@ -387,6 +516,7 @@ public:
     if (glfwGetKey(renderer.window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS && !shiftPressed && dashCount > 0)
     {
       float velocity = 100 * player.rigidBody->getMass();
+
       glm::vec3 forward = glm::normalize(glm::vec3(camera.Front.x, 0.0f, camera.Front.z));
       player.rigidBody->applyImpulse(btVector3(forward.x, forward.y, forward.z) * velocity, btVector3(0, 0, 0));
 
@@ -405,7 +535,7 @@ public:
 
   bool isPlayerGrounded(GameObject &player, btDynamicsWorld *dynamicsWorld)
   {
-    float playerHeight = 3.0f;
+    float playerHeight = player.scale.y;
     btVector3 feetPosition = player.rigidBody->getCenterOfMassPosition() - btVector3(0, (playerHeight / 2), 0) + btVector3(0, 1, 0);
     btVector3 rayEnd = feetPosition + btVector3(0, -2, 0);
     btCollisionWorld::AllHitsRayResultCallback rayCallback(feetPosition, rayEnd);
@@ -433,7 +563,7 @@ public:
   bool isTouchingWall(GameObject &player, btDynamicsWorld *dynamicsWorld)
   {
 
-    float playerHeight = 3.0f;
+    float playerHeight = player.scale.y;
     btVector3 feetPosition = player.rigidBody->getCenterOfMassPosition() - btVector3(0, playerHeight / 2, 0);
     btVector3 headPosition = player.rigidBody->getCenterOfMassPosition() + btVector3(0, playerHeight / 2, 0);
 

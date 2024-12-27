@@ -273,23 +273,6 @@ void Renderer::drawFrame()
 
 void Renderer::cleanup()
 {
-  swapchainManager.cleanupDepthImages(deviceManager.device);
-  swapchainManager.cleanupSwapChain(deviceManager.device);
-
-  bufferManager.cleanup(deviceManager.device);
-
-  descriptorManager.cleanup(deviceManager.device);
-
-  pipelineManager.cleanup(deviceManager.device);
-
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-  {
-    vkDestroySemaphore(deviceManager.device, renderFinishedSemaphores[i], nullptr);
-    vkDestroySemaphore(deviceManager.device, imageAvailableSemaphores[i], nullptr);
-    vkDestroyFence(deviceManager.device, inFlightFences[i], nullptr);
-  }
-
-  vkDestroyCommandPool(deviceManager.device, commandPool, nullptr);
 
   vkDestroyDevice(deviceManager.device, nullptr);
   vkDestroySurfaceKHR(instance, swapchainManager.surface, nullptr);
