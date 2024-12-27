@@ -3,6 +3,7 @@
 #include "gameObjectPhysicsConfig.hpp"
 #include "camera.h"
 #include <chrono>
+#include "playerCollisionCallback.hpp"
 
 #define DEFAULT_DAMPING_FACTOR 10
 #define DEFAULT_MAX_SPEED 12.0f
@@ -146,9 +147,9 @@ public:
     config7.canRotateX = false;
     config7.canRotateY = false;
     config7.canRotateZ = false;
-    config7.friction = 2;
+    config7.friction = 1;
     config7.mass = 0;
-    config7.meshColliderMargin = 0.5;
+    config7.meshColliderMargin = 0.04;
     config7.restitution = 0.1;
 
     objects.emplace(0, GameObject(renderer, 0, config0, glm::vec3(0, 5, 0), glm::vec3(0.1, 0.1, 0.1), glm::vec3(10, 40, 50), {}, {}));
@@ -255,7 +256,7 @@ public:
     }
     objects.at(6).rigidBody->setCcdMotionThreshold(0.5f);
     objects.at(6).rigidBody->setCcdSweptSphereRadius(0.5f);
-
+    PlayerContactCallback callback(objects.at(6).rigidBody);
     while (!glfwWindowShouldClose(renderer.window))
     {
       float currentFrame = static_cast<float>(glfwGetTime());
@@ -265,6 +266,7 @@ public:
       float time = glfwGetTime();
 
       dynamicsWorld->stepSimulation(deltaTime, 10);
+      dynamicsWorld->contactTest(objects.at(6).rigidBody, callback);
 
       grounded = isPlayerGrounded(objects.at(6), dynamicsWorld);
 
@@ -422,10 +424,6 @@ public:
         {
           return true;
         }
-      }
-      else
-      {
-        std::cout << "Hit #" << i << ": Non-rigid body detected" << std::endl;
       }
     }
 
