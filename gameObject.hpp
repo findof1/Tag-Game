@@ -13,7 +13,9 @@ enum class GameObjectTags
 {
   None,
   Ground,
-  Player
+  Player,
+  SpeedPowerup,
+  JumpPowerup
 };
 
 class GameObject

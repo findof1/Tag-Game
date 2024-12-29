@@ -88,9 +88,14 @@ public:
   std::unordered_map<int, GameObject> objects;
 
   std::chrono::system_clock::time_point currentTime;
-  long lastUsedTime = 0;
+  long lastDashTime = 0;
+  long lastSpeedBoostTime = 0;
+  long lastJumpBoostTime = 0;
 
   MovementState movementState = MovementState::Air;
+  float speedMultiplier = 1;
+  float jumpMultiplier = 1;
+
   float dampingFactor = DEFAULT_DAMPING_FACTOR;
   float maxSpeed = DEFAULT_MAX_SPEED;
   float wallJumpCount;
@@ -168,13 +173,15 @@ public:
     objects.emplace(2, GameObject(renderer, 2, config2, glm::vec3(0, 30, 0), glm::vec3(1, 1, 1), glm::vec3(0, 30, 45), cubeVertices, cubeIndices));
     objects.emplace(3, GameObject(renderer, 3, config3, glm::vec3(5.1, 15, 0), glm::vec3(2, 1, 1), glm::vec3(0, 10, 45), cubeVertices, cubeIndices));
 
-    objects.emplace(4, GameObject(renderer, 4, config4, glm::vec3(5, 5, 0), glm::vec3(2, 2, 2), glm::vec3(0, 0, 0), cubeVertices, cubeIndices));
+    objects.emplace(4, GameObject(renderer, 4, config4, glm::vec3(5, 5, 0), glm::vec3(1, 1, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::SpeedPowerup));
 
     objects.emplace(5, GameObject(renderer, 5, config5, glm::vec3(0, 0, 0), glm::vec3(500, 500, 500), glm::vec3(0, 0, 0), cubeVertices, skyBoxIndices));
 
     objects.emplace(6, GameObject(renderer, 6, config6, glm::vec3(-5, 5, 0), glm::vec3(1, 3, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::Player));
 
     objects.emplace(7, GameObject(renderer, 7, config7, glm::vec3(0, -50, 0), glm::vec3(50, 50, 50), glm::vec3(0, 0, 0), {}, {}, GameObjectTags::Ground));
+
+    objects.emplace(8, GameObject(renderer, 8, config4, glm::vec3(15, -20, 16), glm::vec3(1, 1, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::JumpPowerup));
 
     objects.at(0).loadModel("models/couch/couch1.obj");
     objects.at(0).initGraphics(renderer, "models/couch/gray.png");
@@ -189,6 +196,8 @@ public:
     objects.at(7).loadModel("models/testMap/testMap.obj");
     objects.at(7).initGraphics(renderer, "textures/concrete.png");
 
+    objects.at(8).initGraphics(renderer, "textures/wood.png");
+
     renderer.drawObjects.emplace(0, &objects.at(0));
     renderer.drawObjects.emplace(1, &objects.at(1));
     renderer.drawObjects.emplace(2, &objects.at(2));
@@ -197,6 +206,7 @@ public:
     renderer.drawObjects.emplace(5, &objects.at(5));
     renderer.drawObjects.emplace(6, &objects.at(6));
     renderer.drawObjects.emplace(7, &objects.at(7));
+    renderer.drawObjects.emplace(8, &objects.at(8));
     mainLoop();
     renderer.cleanup();
   }
@@ -276,19 +286,20 @@ public:
 
       float time = glfwGetTime();
 
-      dynamicsWorld->stepSimulation(deltaTime, 10);
+      dynamicsWorld->stepSimulation(deltaTime);
       dynamicsWorld->contactTest(objects.at(6).rigidBody, callback);
 
       grounded = isPlayerGrounded(objects.at(6), dynamicsWorld);
 
+      currentTime = std::chrono::system_clock::now();
+      std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch());
+      long currentTimeInSeconds = duration.count();
       if (grounded)
       {
         movementState = MovementState::Ground;
         wallJumpCount = 2;
-        currentTime = std::chrono::system_clock::now();
-        std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch());
-        long currentTimeInSeconds = duration.count();
-        if (currentTimeInSeconds - lastUsedTime >= 1)
+
+        if (currentTimeInSeconds - lastDashTime >= 1)
         {
           dashCount = 1;
         }
@@ -298,8 +309,35 @@ public:
         movementState = MovementState::Air;
       }
 
+      if (currentTimeInSeconds - lastSpeedBoostTime < 5)
+      {
+        speedMultiplier = 1.5;
+      }
+      else
+      {
+        speedMultiplier = 1;
+      }
+
+      if (currentTimeInSeconds - lastJumpBoostTime < 5)
+      {
+        jumpMultiplier = 1.5;
+      }
+      else
+      {
+        jumpMultiplier = 1;
+      }
+
       for (auto &gameObject : objects)
       {
+        if (gameObject.second.tag == GameObjectTags::SpeedPowerup && glm::distance(objects.at(6).pos, gameObject.second.pos) < 2)
+        {
+          lastSpeedBoostTime = currentTimeInSeconds;
+        }
+        else if (gameObject.second.tag == GameObjectTags::JumpPowerup && glm::distance(objects.at(6).pos, gameObject.second.pos) < 2)
+        {
+          lastJumpBoostTime = currentTimeInSeconds;
+        }
+
         gameObject.second.updatePhysics();
       }
 
@@ -321,9 +359,9 @@ public:
         float smoothSpeed = 10.0f;
         camera.Zoom = zoomLerp(camera.Zoom, std::clamp(ZOOM * zoomFactor, 70.0f, 140.0f), smoothSpeed * deltaTime);
 
-        if (speed > maxSpeed)
+        if (speed > maxSpeed * speedMultiplier)
         {
-          btVector3 excessVelocity = horizontalVelocity.normalized() * (speed - maxSpeed);
+          btVector3 excessVelocity = horizontalVelocity.normalized() * (speed - maxSpeed * speedMultiplier);
 
           btVector3 dampingForce = -excessVelocity * objects.at(6).rigidBody->getMass() * dampingFactor;
 
@@ -438,7 +476,7 @@ public:
         currentTime = std::chrono::system_clock::now();
         std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch());
         long currentTimeInSeconds = duration.count();
-        if (currentTimeInSeconds - lastUsedTime >= 1)
+        if (currentTimeInSeconds - lastDashTime >= 1)
         {
           velocity = 60 * player.rigidBody->getMass();
         }
@@ -446,46 +484,56 @@ public:
       btVector3 force(0, 0, 0);
 
       glm::vec3 forward = glm::normalize(glm::vec3(camera.Front.x, 0.0f, camera.Front.z));
-      if (glfwGetKey(renderer.window, GLFW_KEY_W) == GLFW_PRESS)
-        force += btVector3(forward.x, 0.0f, forward.z);
-      if (glfwGetKey(renderer.window, GLFW_KEY_S) == GLFW_PRESS)
-        force -= btVector3(forward.x, 0.0f, forward.z);
-      if (glfwGetKey(renderer.window, GLFW_KEY_A) == GLFW_PRESS)
-        force -= btVector3(camera.Right.x, 0.0f, camera.Right.z);
-      if (glfwGetKey(renderer.window, GLFW_KEY_D) == GLFW_PRESS)
-        force += btVector3(camera.Right.x, 0.0f, camera.Right.z);
-
-      force = force.normalize() * velocity;
-
-      float playerHeight = 3.0f;
-      btVector3 feetPosition = player.rigidBody->getCenterOfMassPosition() - btVector3(0, playerHeight / 2, 0);
-      btVector3 headPosition = player.rigidBody->getCenterOfMassPosition() + btVector3(0, playerHeight / 2, 0);
-
-      bool hasHit = false;
-      for (float i = feetPosition.getY() + 0.01; i <= headPosition.getY() + 0.01; i += 1.f)
+      if (glfwGetKey(renderer.window, GLFW_KEY_W) == GLFW_PRESS && glfwGetKey(renderer.window, GLFW_KEY_S) != GLFW_PRESS)
       {
-        btVector3 position(feetPosition.getX(), i, feetPosition.getZ());
-        btCollisionWorld::ClosestRayResultCallback rayCallback(position, position + force.normalized());
-        dynamicsWorld->rayTest(position, position + force.normalized(), rayCallback);
-        if (rayCallback.hasHit())
+        force += btVector3(forward.x, 0.0f, forward.z);
+      }
+      if (glfwGetKey(renderer.window, GLFW_KEY_S) == GLFW_PRESS && glfwGetKey(renderer.window, GLFW_KEY_W) != GLFW_PRESS)
+      {
+        force -= btVector3(forward.x, 0.0f, forward.z);
+      }
+      if (glfwGetKey(renderer.window, GLFW_KEY_A) == GLFW_PRESS && glfwGetKey(renderer.window, GLFW_KEY_D) != GLFW_PRESS)
+      {
+        force -= btVector3(camera.Right.x, 0.0f, camera.Right.z);
+      }
+      if (glfwGetKey(renderer.window, GLFW_KEY_D) == GLFW_PRESS && glfwGetKey(renderer.window, GLFW_KEY_A) != GLFW_PRESS)
+      {
+        force += btVector3(camera.Right.x, 0.0f, camera.Right.z);
+      }
+
+      force = force.normalize() * velocity * speedMultiplier;
+      if (!std::isnan(force.x()) && !std::isnan(force.y()) && !std::isnan(force.z()))
+      {
+        float playerHeight = 3.0f;
+        btVector3 feetPosition = player.rigidBody->getCenterOfMassPosition() - btVector3(0, playerHeight / 2, 0);
+        btVector3 headPosition = player.rigidBody->getCenterOfMassPosition() + btVector3(0, playerHeight / 2, 0);
+
+        bool hasHit = false;
+        for (float i = feetPosition.getY() + 0.01; i <= headPosition.getY() + 0.01; i += 1.f)
         {
-          const btRigidBody *rigidBody = dynamic_cast<const btRigidBody *>(rayCallback.m_collisionObject);
-          if (rigidBody)
+          btVector3 position(feetPosition.getX(), i, feetPosition.getZ());
+          btCollisionWorld::ClosestRayResultCallback rayCallback(position, position + force.normalized());
+          dynamicsWorld->rayTest(position, position + force.normalized(), rayCallback);
+          if (rayCallback.hasHit())
           {
-            btScalar mass = rigidBody->getMass();
-            if (mass == 0)
+            const btRigidBody *rigidBody = dynamic_cast<const btRigidBody *>(rayCallback.m_collisionObject);
+            if (rigidBody)
             {
-              hasHit = true;
-              break;
+              btScalar mass = rigidBody->getMass();
+              if (mass == 0)
+              {
+                hasHit = true;
+                break;
+              }
             }
           }
         }
-      }
 
-      if (!hasHit)
-      {
-        player.rigidBody->applyCentralForce(force);
-        player.rigidBody->activate();
+        if (!hasHit)
+        {
+          player.rigidBody->applyCentralForce(force);
+          player.rigidBody->activate();
+        }
       }
     }
 
@@ -494,14 +542,15 @@ public:
       if (grounded)
       {
         btVector3 force(0, 500, 0);
-        player.rigidBody->applyImpulse(force, btVector3(0, 0, 0));
+        player.rigidBody->applyImpulse(force * jumpMultiplier, btVector3(0, 0, 0));
         dashCount = 1;
       }
 
-      if (wallJumpCount > 0 && isTouchingWall(player, dynamicsWorld))
+      bool canWalljump = wallJumpCount > 0 && isTouchingWall(player, dynamicsWorld);
+      if (canWalljump && (!grounded || camera.Pitch > 80))
       {
-        btVector3 force(0, 500, 0);
-        player.rigidBody->applyImpulse(force, btVector3(0, 0, 0));
+        btVector3 force(0, 350, 0);
+        player.rigidBody->applyImpulse(force * jumpMultiplier, btVector3(0, 0, 0));
         dashCount = 1;
         wallJumpCount--;
       }
@@ -518,12 +567,12 @@ public:
       float velocity = 100 * player.rigidBody->getMass();
 
       glm::vec3 forward = glm::normalize(glm::vec3(camera.Front.x, 0.0f, camera.Front.z));
-      player.rigidBody->applyImpulse(btVector3(forward.x, forward.y, forward.z) * velocity, btVector3(0, 0, 0));
+      player.rigidBody->applyImpulse(btVector3(forward.x, forward.y, forward.z) * velocity * speedMultiplier, btVector3(0, 0, 0));
 
       currentTime = std::chrono::system_clock::now();
       std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch());
       long currentTimeInSeconds = duration.count();
-      lastUsedTime = currentTimeInSeconds;
+      lastDashTime = currentTimeInSeconds;
       dashCount--;
       shiftPressed = true;
     }
