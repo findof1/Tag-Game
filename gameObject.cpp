@@ -8,7 +8,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include "gameObjectPhysicsConfig.hpp"
 
-GameObject::GameObject(Renderer &renderer, int id, PhysicsConfig &config, const glm::vec3 &pos, const glm::vec3 &scale, const glm::vec3 &rotationZYX, std::vector<Vertex> vertices, std::vector<uint32_t> indices, GameObjectTags tag) : id(id), config(config), pos(pos), scale(scale), rotationZYX(rotationZYX), vertices(vertices), indices(indices), textureManager(renderer.bufferManager), tag(tag)
+GameObject::GameObject(Renderer &renderer, int id, PhysicsConfig &config, const glm::vec3 &pos, const glm::vec3 &scale, const glm::vec3 &rotationZYX, std::vector<Vertex> vertices, std::vector<uint32_t> indices, GameObjectTags tag) : id(id), config(config), pos(pos), scale(scale), rotationZYX(rotationZYX), vertices(vertices), indices(indices), textureManager(renderer.bufferManager, renderer), tag(tag)
 {
 }
 
@@ -359,5 +359,28 @@ void GameObject::setScale(const glm::vec3 &newScale)
         rigidBody->activate();
       }
     }
+  }
+}
+
+void GameObject::setPosition(const glm::vec3 &newPosition)
+{
+  pos = newPosition;
+
+  if (rigidBody)
+  {
+    rigidBody->setActivationState(DISABLE_SIMULATION);
+
+    btTransform transform;
+    transform.setIdentity();
+    transform.setOrigin(btVector3(pos.x, pos.y, pos.z));
+
+    rigidBody->setWorldTransform(transform);
+
+    if (motionState)
+    {
+      motionState->setWorldTransform(transform);
+    }
+
+    rigidBody->setActivationState(ACTIVE_TAG);
   }
 }

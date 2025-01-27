@@ -63,9 +63,10 @@ public:
 
   std::vector<VkSemaphore> imageAvailableSemaphores;
   std::vector<VkSemaphore> renderFinishedSemaphores;
+  VkSemaphore textureUpdateSemaphore;
   std::vector<VkFence> inFlightFences;
 
-  bool framebufferResized = false;
+  bool framebufferResized = true;
 
   void drawFrame();
 

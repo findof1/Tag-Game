@@ -15,7 +15,8 @@ enum class GameObjectTags
   Ground,
   Player,
   SpeedPowerup,
-  JumpPowerup
+  JumpPowerup,
+  NetworkedPlayer
 };
 
 class GameObject
@@ -47,6 +48,7 @@ public:
   void cleanupPhysics(btDiscreteDynamicsWorld *dynamicsWorld);
 
   void setScale(const glm::vec3 &newScale);
+  void setPosition(const glm::vec3 &newPosition);
 
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;

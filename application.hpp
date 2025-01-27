@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include "playerCollisionCallback.hpp"
+#include "socketManager.hpp"
 
 #define DEFAULT_DAMPING_FACTOR 10
 #define DEFAULT_MAX_SPEED 12.0f
@@ -69,8 +70,14 @@ class Application
 {
 public:
   Renderer renderer;
+  SocketManager socketManager;
   Camera camera;
   GLFWwindow *window;
+  btDiscreteDynamicsWorld *dynamicsWorld;
+
+  std::mutex objectsMutex;
+
+  int nextGameObjectId = 0;
 
   uint32_t WIDTH = 1600;
   uint32_t HEIGHT = 1200;
@@ -88,6 +95,8 @@ public:
   std::unordered_map<int, GameObject> objects;
 
   std::chrono::system_clock::time_point currentTime;
+  std::chrono::high_resolution_clock::time_point lastBroadcast = std::chrono::high_resolution_clock::now();
+
   long lastDashTime = 0;
   long lastSpeedBoostTime = 0;
   long lastJumpBoostTime = 0;
@@ -101,8 +110,9 @@ public:
   float wallJumpCount;
   float dashCount;
 
-  Application() : camera(FirstPerson), renderer(camera, WIDTH, HEIGHT)
+  Application() : camera(FirstPerson), renderer(camera, WIDTH, HEIGHT), socketManager(this)
   {
+    socketManager.init();
   }
 
   void run()
@@ -138,6 +148,7 @@ public:
 
     PhysicsConfig config4;
     config4.collider = ColliderType::Box;
+    config4.canMove = false;
     config4.interactable = false;
     config4.mass = 1;
 
@@ -168,47 +179,56 @@ public:
     config7.meshColliderMargin = 0.5;
     config7.restitution = 0.1;
 
-    objects.emplace(0, GameObject(renderer, 0, config0, glm::vec3(0, 5, 0), glm::vec3(0.1, 0.1, 0.1), glm::vec3(10, 40, 50), {}, {}));
-    objects.emplace(1, GameObject(renderer, 1, config1, glm::vec3(0, 0, 0), glm::vec3(50, 2, 50), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::Ground));
-    objects.emplace(2, GameObject(renderer, 2, config2, glm::vec3(0, 30, 0), glm::vec3(1, 1, 1), glm::vec3(0, 30, 45), cubeVertices, cubeIndices));
-    objects.emplace(3, GameObject(renderer, 3, config3, glm::vec3(5.1, 15, 0), glm::vec3(2, 1, 1), glm::vec3(0, 10, 45), cubeVertices, cubeIndices));
+    objects.emplace(nextGameObjectId, GameObject(renderer, nextGameObjectId, config0, glm::vec3(0, 5, 0), glm::vec3(0.1, 0.1, 0.1), glm::vec3(10, 40, 50), {}, {}));
+    objects.at(nextGameObjectId).loadModel("models/couch/couch1.obj");
+    objects.at(nextGameObjectId).initGraphics(renderer, "models/couch/gray.png");
+    renderer.drawObjects.emplace(nextGameObjectId, &objects.at(nextGameObjectId));
+    nextGameObjectId++;
 
-    objects.emplace(4, GameObject(renderer, 4, config4, glm::vec3(5, 5, 0), glm::vec3(1, 1, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::SpeedPowerup));
+    objects.emplace(nextGameObjectId, GameObject(renderer, nextGameObjectId, config1, glm::vec3(0, 0, 0), glm::vec3(50, 2, 50), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::Ground));
+    objects.at(nextGameObjectId).initGraphics(renderer, "textures/wood.png");
+    renderer.drawObjects.emplace(nextGameObjectId, &objects.at(nextGameObjectId));
+    nextGameObjectId++;
 
-    objects.emplace(5, GameObject(renderer, 5, config5, glm::vec3(0, 0, 0), glm::vec3(500, 500, 500), glm::vec3(0, 0, 0), cubeVertices, skyBoxIndices));
+    objects.emplace(nextGameObjectId, GameObject(renderer, nextGameObjectId, config2, glm::vec3(0, 30, 0), glm::vec3(1, 1, 1), glm::vec3(0, 30, 45), cubeVertices, cubeIndices));
+    objects.at(nextGameObjectId).initGraphics(renderer, "textures/metal.png");
+    renderer.drawObjects.emplace(nextGameObjectId, &objects.at(nextGameObjectId));
+    nextGameObjectId++;
 
-    objects.emplace(6, GameObject(renderer, 6, config6, glm::vec3(-5, 5, 0), glm::vec3(1, 3, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::Player));
+    objects.emplace(nextGameObjectId, GameObject(renderer, nextGameObjectId, config3, glm::vec3(5.1, 15, 0), glm::vec3(2, 1, 1), glm::vec3(0, 10, 45), cubeVertices, cubeIndices));
+    objects.at(nextGameObjectId).initGraphics(renderer, "textures/wall.png");
+    renderer.drawObjects.emplace(nextGameObjectId, &objects.at(nextGameObjectId));
+    nextGameObjectId++;
 
-    objects.emplace(7, GameObject(renderer, 7, config7, glm::vec3(0, -50, 0), glm::vec3(50, 50, 50), glm::vec3(0, 0, 0), {}, {}, GameObjectTags::Ground));
+    objects.emplace(nextGameObjectId, GameObject(renderer, nextGameObjectId, config4, glm::vec3(5, 5, 0), glm::vec3(1, 1, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::SpeedPowerup));
+    objects.at(nextGameObjectId).initGraphics(renderer, "textures/wood.png");
+    renderer.drawObjects.emplace(nextGameObjectId, &objects.at(nextGameObjectId));
+    nextGameObjectId++;
 
-    objects.emplace(8, GameObject(renderer, 8, config4, glm::vec3(15, -20, 16), glm::vec3(1, 1, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::JumpPowerup));
+    objects.emplace(nextGameObjectId, GameObject(renderer, nextGameObjectId, config5, glm::vec3(0, 0, 0), glm::vec3(500, 500, 500), glm::vec3(0, 0, 0), cubeVertices, skyBoxIndices));
+    objects.at(nextGameObjectId).initGraphics(renderer, "textures/sky.png");
+    renderer.drawObjects.emplace(nextGameObjectId, &objects.at(nextGameObjectId));
+    nextGameObjectId++;
 
-    objects.at(0).loadModel("models/couch/couch1.obj");
-    objects.at(0).initGraphics(renderer, "models/couch/gray.png");
+    objects.emplace(nextGameObjectId, GameObject(renderer, nextGameObjectId, config6, glm::vec3(-5, 5, 0), glm::vec3(1, 3, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::Player));
+    objects.at(nextGameObjectId).initGraphics(renderer, "textures/wall.png");
+    renderer.drawObjects.emplace(nextGameObjectId, &objects.at(nextGameObjectId));
+    nextGameObjectId++;
 
-    objects.at(1).initGraphics(renderer, "textures/wood.png");
-    objects.at(2).initGraphics(renderer, "textures/metal.png");
-    objects.at(3).initGraphics(renderer, "textures/wall.png");
-    objects.at(4).initGraphics(renderer, "textures/wood.png");
-    objects.at(5).initGraphics(renderer, "textures/sky.png");
-    objects.at(6).initGraphics(renderer, "textures/wall.png");
+    objects.emplace(nextGameObjectId, GameObject(renderer, nextGameObjectId, config7, glm::vec3(0, -50, 0), glm::vec3(50, 50, 50), glm::vec3(0, 0, 0), {}, {}, GameObjectTags::Ground));
+    objects.at(nextGameObjectId).loadModel("models/testMap/testMap.obj");
+    objects.at(nextGameObjectId).initGraphics(renderer, "textures/concrete.png");
+    renderer.drawObjects.emplace(nextGameObjectId, &objects.at(nextGameObjectId));
+    nextGameObjectId++;
 
-    objects.at(7).loadModel("models/testMap/testMap.obj");
-    objects.at(7).initGraphics(renderer, "textures/concrete.png");
+    objects.emplace(nextGameObjectId, GameObject(renderer, nextGameObjectId, config4, glm::vec3(15, -20, 16), glm::vec3(1, 1, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::JumpPowerup));
+    objects.at(nextGameObjectId).initGraphics(renderer, "textures/wood.png");
+    renderer.drawObjects.emplace(nextGameObjectId, &objects.at(nextGameObjectId));
+    nextGameObjectId++;
 
-    objects.at(8).initGraphics(renderer, "textures/wood.png");
-
-    renderer.drawObjects.emplace(0, &objects.at(0));
-    renderer.drawObjects.emplace(1, &objects.at(1));
-    renderer.drawObjects.emplace(2, &objects.at(2));
-    renderer.drawObjects.emplace(3, &objects.at(3));
-    renderer.drawObjects.emplace(4, &objects.at(4));
-    renderer.drawObjects.emplace(5, &objects.at(5));
-    renderer.drawObjects.emplace(6, &objects.at(6));
-    renderer.drawObjects.emplace(7, &objects.at(7));
-    renderer.drawObjects.emplace(8, &objects.at(8));
     mainLoop();
     renderer.cleanup();
+    // socketManager.cleanup();
   }
 
   void initWindow()
@@ -268,7 +288,7 @@ public:
     btDefaultCollisionConfiguration *collisionConfiguration = new btDefaultCollisionConfiguration();
     btCollisionDispatcher *dispatcher = new btCollisionDispatcher(collisionConfiguration);
     btSequentialImpulseConstraintSolver *solver = new btSequentialImpulseConstraintSolver();
-    btDiscreteDynamicsWorld *dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
+    dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
     dynamicsWorld->setGravity(btVector3(0, -20.f, 0));
 
     for (auto &gameObject : objects)
@@ -278,105 +298,122 @@ public:
     objects.at(6).rigidBody->setCcdMotionThreshold(0.5f);
     objects.at(6).rigidBody->setCcdSweptSphereRadius(0.5f);
     PlayerContactCallback callback(objects.at(6).rigidBody);
+
+    socketManager.startReceiving();
+
     while (!glfwWindowShouldClose(renderer.window))
     {
-      float currentFrame = static_cast<float>(glfwGetTime());
-      deltaTime = currentFrame - lastFrame;
-      lastFrame = currentFrame;
-
-      float time = glfwGetTime();
-
-      dynamicsWorld->stepSimulation(deltaTime);
-      dynamicsWorld->contactTest(objects.at(6).rigidBody, callback);
-
-      grounded = isPlayerGrounded(objects.at(6), dynamicsWorld);
-
-      currentTime = std::chrono::system_clock::now();
-      std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch());
-      long currentTimeInSeconds = duration.count();
-      if (grounded)
       {
-        movementState = MovementState::Ground;
-        wallJumpCount = 2;
+        std::lock_guard<std::mutex> lock(objectsMutex);
 
-        if (currentTimeInSeconds - lastDashTime >= 1)
+        float currentFrame = static_cast<float>(glfwGetTime());
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+        float time = glfwGetTime();
+
+        dynamicsWorld->stepSimulation(deltaTime);
+        dynamicsWorld->contactTest(objects.at(6).rigidBody, callback);
+
+        grounded = isPlayerGrounded(objects.at(6), dynamicsWorld);
+
+        currentTime = std::chrono::system_clock::now();
+        std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch());
+        long currentTimeInSeconds = duration.count();
+        if (grounded)
         {
-          dashCount = 1;
+          movementState = MovementState::Ground;
+          wallJumpCount = 2;
+
+          if (currentTimeInSeconds - lastDashTime >= 1)
+          {
+            dashCount = 1;
+          }
         }
-      }
-      else
-      {
-        movementState = MovementState::Air;
-      }
-
-      if (currentTimeInSeconds - lastSpeedBoostTime < 5)
-      {
-        speedMultiplier = 1.5;
-      }
-      else
-      {
-        speedMultiplier = 1;
-      }
-
-      if (currentTimeInSeconds - lastJumpBoostTime < 5)
-      {
-        jumpMultiplier = 1.5;
-      }
-      else
-      {
-        jumpMultiplier = 1;
-      }
-
-      for (auto &gameObject : objects)
-      {
-        if (gameObject.second.tag == GameObjectTags::SpeedPowerup && glm::distance(objects.at(6).pos, gameObject.second.pos) < 2)
+        else
         {
-          lastSpeedBoostTime = currentTimeInSeconds;
-        }
-        else if (gameObject.second.tag == GameObjectTags::JumpPowerup && glm::distance(objects.at(6).pos, gameObject.second.pos) < 2)
-        {
-          lastJumpBoostTime = currentTimeInSeconds;
+          movementState = MovementState::Air;
         }
 
-        gameObject.second.updatePhysics();
-      }
-
-      if (camera.type = FirstPerson)
-      {
-        processPlayerInput(objects.at(6), dynamicsWorld);
-        btTransform trans;
-        objects.at(6).rigidBody->getMotionState()->getWorldTransform(trans);
-        btVector3 origin = trans.getOrigin();
-        camera.Position = glm::vec3(origin.x(), origin.y() + objects.at(6).scale.y * 0.4, origin.z());
-
-        btVector3 velocity = objects.at(6).rigidBody->getLinearVelocity();
-
-        btVector3 horizontalVelocity(velocity.x(), 0.0f, velocity.z());
-
-        float speed = horizontalVelocity.length();
-
-        float zoomFactor = 1.0f + speed / (maxSpeed * 4);
-        float smoothSpeed = 10.0f;
-        camera.Zoom = zoomLerp(camera.Zoom, std::clamp(ZOOM * zoomFactor, 70.0f, 140.0f), smoothSpeed * deltaTime);
-
-        if (speed > maxSpeed * speedMultiplier)
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<float> elapsed = currentTime - lastBroadcast;
+        if (elapsed.count() >= 0.1f)
         {
-          btVector3 excessVelocity = horizontalVelocity.normalized() * (speed - maxSpeed * speedMultiplier);
-
-          btVector3 dampingForce = -excessVelocity * objects.at(6).rigidBody->getMass() * dampingFactor;
-
-          objects.at(6).rigidBody->applyCentralForce(dampingForce);
-          objects.at(6).rigidBody->activate();
+          socketManager.broadcast(objects.at(6).pos);
+          lastBroadcast = currentTime;
         }
-      }
-      else
-      {
-        processInput();
-      }
 
-      glfwPollEvents();
-      renderer.drawFrame();
-      updateFPSCounter();
+        if (currentTimeInSeconds - lastSpeedBoostTime < 5)
+        {
+          speedMultiplier = 1.5;
+        }
+        else
+        {
+          speedMultiplier = 1;
+        }
+
+        if (currentTimeInSeconds - lastJumpBoostTime < 5)
+        {
+          jumpMultiplier = 1.5;
+        }
+        else
+        {
+          jumpMultiplier = 1;
+        }
+
+        for (auto &gameObject : objects)
+        {
+          if (gameObject.second.tag == GameObjectTags::SpeedPowerup && glm::distance(objects.at(6).pos, gameObject.second.pos) < 2)
+          {
+            lastSpeedBoostTime = currentTimeInSeconds;
+          }
+          else if (gameObject.second.tag == GameObjectTags::JumpPowerup && glm::distance(objects.at(6).pos, gameObject.second.pos) < 2)
+          {
+            lastJumpBoostTime = currentTimeInSeconds;
+          }
+
+          gameObject.second.updatePhysics();
+        }
+
+        if (camera.type = FirstPerson)
+        {
+          processPlayerInput(objects.at(6));
+          btTransform trans;
+          objects.at(6).rigidBody->getMotionState()->getWorldTransform(trans);
+          btVector3 origin = trans.getOrigin();
+          camera.Position = glm::vec3(origin.x(), origin.y() + objects.at(6).scale.y * 0.4, origin.z());
+
+          btVector3 velocity = objects.at(6).rigidBody->getLinearVelocity();
+
+          btVector3 horizontalVelocity(velocity.x(), 0.0f, velocity.z());
+
+          float speed = horizontalVelocity.length();
+
+          float zoomFactor = 1.0f + speed / (maxSpeed * 4);
+          float smoothSpeed = 10.0f;
+          camera.Zoom = zoomLerp(camera.Zoom, std::clamp(ZOOM * zoomFactor, 85.0f, 120.0f), smoothSpeed * deltaTime);
+
+          if (speed > maxSpeed * speedMultiplier)
+          {
+            btVector3 excessVelocity = horizontalVelocity.normalized() * (speed - maxSpeed * speedMultiplier);
+
+            btVector3 dampingForce = -excessVelocity * objects.at(6).rigidBody->getMass() * dampingFactor;
+
+            objects.at(6).rigidBody->applyCentralForce(dampingForce);
+            objects.at(6).rigidBody->activate();
+          }
+        }
+        else
+        {
+          processInput();
+        }
+
+        glfwPollEvents();
+
+        renderer.drawFrame();
+
+        updateFPSCounter();
+      }
     }
 
     delete dynamicsWorld;
@@ -409,11 +446,65 @@ public:
       gameObject.second.textureManager.cleanup(renderer.deviceManager.device);
     }
     renderer.cleanup();
+    socketManager.cleanup();
   }
 
   float zoomLerp(float start, float end, float t)
   {
     return start + t * (end - start);
+  }
+
+  int addPlayer()
+  {
+    std::lock_guard<std::mutex> lock(objectsMutex);
+
+    PhysicsConfig config;
+    config.collider = ColliderType::Box;
+    config.isRigidBody = true;
+    config.canMove = false;
+    config.canRotateX = false;
+    config.canRotateY = false;
+    config.canRotateZ = false;
+    config.friction = 0.8;
+    config.linearDamping = 0.1;
+    config.mass = 30;
+    config.restitution = 0.8;
+    objects.emplace(nextGameObjectId, GameObject(renderer, nextGameObjectId, config, glm::vec3(-5, 5, 0), glm::vec3(1, 3, 1), glm::vec3(0, 0, 0), cubeVertices, cubeIndices, GameObjectTags::NetworkedPlayer));
+    objects.at(nextGameObjectId).initGraphics(renderer, "textures/wall.png");
+    renderer.drawObjects.emplace(nextGameObjectId, &objects.at(nextGameObjectId));
+    objects.at(nextGameObjectId).initPhysics(dynamicsWorld);
+    nextGameObjectId++;
+    return nextGameObjectId - 1;
+  }
+
+  void removePlayer(int id)
+  {
+    std::lock_guard<std::mutex> lock(objectsMutex);
+
+    auto it = objects.find(id);
+    if (it != objects.end())
+    {
+      it->second.setPosition(glm::vec3(10000, 10000, 10000));
+      it->second.cleanupPhysics(dynamicsWorld);
+    }
+    else
+    {
+      std::cerr << "Error: Attempted to remove non-existent player with ID " << id << std::endl;
+    }
+  }
+
+  void editPlayer(PlayerData data)
+  {
+    std::lock_guard<std::mutex> lock(objectsMutex);
+
+    if (objects.find(data.id) != objects.end())
+    {
+      objects.at(data.id).setPosition(data.position);
+    }
+    else
+    {
+      std::cerr << "Error: Attempted to edit non-existent player with ID " << data.id << std::endl;
+    }
   }
 
   void processInput()
@@ -433,7 +524,7 @@ public:
       camera.ProcessKeyboard(RIGHT, deltaTime);
   }
 
-  void processPlayerInput(GameObject &player, btDynamicsWorld *dynamicsWorld)
+  void processPlayerInput(GameObject &player)
   {
     if (glfwGetKey(renderer.window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
       glfwSetWindowShouldClose(renderer.window, true);

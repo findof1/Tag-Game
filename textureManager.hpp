@@ -2,6 +2,7 @@
 #include <vulkan/vulkan.h>
 #include <memory>
 class BufferManager;
+class Renderer;
 class TextureManager
 {
 public:
@@ -10,7 +11,8 @@ public:
   VkImageView textureImageView;
   VkSampler textureSampler;
   BufferManager &bufferManager;
-  TextureManager(BufferManager &bufferManager) : bufferManager(bufferManager)
+  Renderer &renderer;
+  TextureManager(BufferManager &bufferManager, Renderer &renderer) : bufferManager(bufferManager), renderer(renderer)
   {
   }
   ~TextureManager()
@@ -19,5 +21,8 @@ public:
   void createTextureImageView(VkDevice device);
   void createTextureImage(std::string texturePath, VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue);
   void createTextureSampler(VkDevice device, VkPhysicalDevice physicalDevice);
+
+  void updateTexture(std::string newTexturePath, VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue);
+
   void cleanup(VkDevice device);
 };
