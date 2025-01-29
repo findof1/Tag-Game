@@ -4,6 +4,7 @@
 #include <string>
 #include <stdexcept>
 #include "bufferManager.hpp"
+#include "renderer.hpp"
 
 void TextureManager::createTextureImageView(VkDevice device)
 {
@@ -47,6 +48,20 @@ void TextureManager::createTextureImage(std::string texturePath, VkDevice device
 
 void TextureManager::updateTexture(std::string newTexturePath, VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue)
 {
+  /*
+  VkSemaphoreWaitInfo waitInfo{};
+  waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+  waitInfo.semaphoreCount = 1;
+  waitInfo.pSemaphores = &renderer.textureUpdateSemaphore;
+  uint64_t timeout = UINT64_MAX;
+  waitInfo.pValues = &timeout;
+
+  std::cout << "0" << std::endl;
+  if (vkWaitSemaphores(device, &waitInfo, UINT64_MAX) != VK_SUCCESS)
+  {
+    throw std::runtime_error("failed to wait on texture update semaphore!");
+  }
+*/
 
   int texWidth, texHeight, texChannels;
   stbi_uc *pixels = stbi_load(newTexturePath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -79,8 +94,22 @@ void TextureManager::updateTexture(std::string newTexturePath, VkDevice device, 
                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, device, commandPool, graphicsQueue);
 
+  VkSemaphoreSignalInfo signalInfo = {};
+  signalInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO;
+  signalInfo.semaphore = renderer.textureUpdateSemaphore;
+  signalInfo.value = 0;
+
+  VkResult result = vkSignalSemaphore(device, &signalInfo);
+
+  if (result != VK_SUCCESS)
+  {
+    throw std::runtime_error("failed to signal texture update semaphore!");
+  }
+
   vkDestroyBuffer(device, stagingBuffer, nullptr);
   vkFreeMemory(device, stagingBufferMemory, nullptr);
+
+  std::cout << "updated texture" << std::endl;
 }
 
 void TextureManager::createTextureSampler(VkDevice device, VkPhysicalDevice physicalDevice)

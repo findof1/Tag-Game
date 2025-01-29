@@ -78,7 +78,7 @@ void Renderer::createSyncObjects()
     }
   }
 
-  if (vkCreateSemaphore(deviceManager.device, &semaphoreInfo, nullptr, &textureUpdateSemaphore))
+  if (vkCreateSemaphore(deviceManager.device, &semaphoreInfo, nullptr, &textureUpdateSemaphore) != VK_SUCCESS)
   {
     throw std::runtime_error("failed to create texture synchronization object!");
   }
@@ -230,18 +230,18 @@ void Renderer::drawFrame()
   VkSubmitInfo submitInfo{};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-  VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
-  VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+  VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame], textureUpdateSemaphore};
+  VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT};
 
-  submitInfo.waitSemaphoreCount = 1;
+  submitInfo.waitSemaphoreCount = 2;
   submitInfo.pWaitSemaphores = waitSemaphores;
   submitInfo.pWaitDstStageMask = waitStages;
 
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
 
-  VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
-  submitInfo.signalSemaphoreCount = 1;
+  VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame], textureUpdateSemaphore};
+  submitInfo.signalSemaphoreCount = 2;
   submitInfo.pSignalSemaphores = signalSemaphores;
 
   if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS)
@@ -252,7 +252,7 @@ void Renderer::drawFrame()
   VkPresentInfoKHR presentInfo{};
   presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
-  presentInfo.waitSemaphoreCount = 1;
+  presentInfo.waitSemaphoreCount = 2;
   presentInfo.pWaitSemaphores = signalSemaphores;
 
   VkSwapchainKHR swapChains[] = {swapchainManager.swapChain};

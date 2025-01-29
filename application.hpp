@@ -79,6 +79,8 @@ public:
 
   int nextGameObjectId = 0;
 
+  int taggedPlayer = -1;
+
   uint32_t WIDTH = 1600;
   uint32_t HEIGHT = 1200;
   bool spacePressed = false;
@@ -491,6 +493,44 @@ public:
     {
       std::cerr << "Error: Attempted to remove non-existent player with ID " << id << std::endl;
     }
+  }
+
+  void setTagged(int id)
+  {
+    std::lock_guard<std::mutex> lock(objectsMutex);
+    auto it = objects.find(id);
+    if (it != objects.end())
+    {
+      if (taggedPlayer != -1)
+      {
+        auto previousTagger = objects.find(taggedPlayer);
+        if (previousTagger != objects.end())
+        {
+          std::cout << "Editing previous tagger in setTagged: " << taggedPlayer << std::endl;
+          previousTagger->second.textureManager.updateTexture("textures/wall.png", renderer.deviceManager.device, renderer.deviceManager.physicalDevice, renderer.commandPool, renderer.graphicsQueue);
+        }
+      }
+      it->second.textureManager.updateTexture("textures/fire.png", renderer.deviceManager.device, renderer.deviceManager.physicalDevice, renderer.commandPool, renderer.graphicsQueue);
+      taggedPlayer = id;
+    }
+    else
+    {
+      std::cerr << "Error: Attempted to set non-existent player to tagged with ID " << id << std::endl;
+    }
+  }
+
+  void youAreTagged()
+  {
+    std::lock_guard<std::mutex> lock(objectsMutex);
+
+    auto previousTagger = objects.find(taggedPlayer);
+    if (previousTagger != objects.end())
+    {
+      std::cout << "Editing previous tagger in youAreTagged: " << taggedPlayer << std::endl;
+      previousTagger->second.textureManager.updateTexture("textures/wall.png", renderer.deviceManager.device, renderer.deviceManager.physicalDevice, renderer.commandPool, renderer.graphicsQueue);
+    }
+
+    taggedPlayer = -1;
   }
 
   void editPlayer(PlayerData data)

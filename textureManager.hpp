@@ -23,6 +23,5 @@ public:
   void createTextureSampler(VkDevice device, VkPhysicalDevice physicalDevice);
 
   void updateTexture(std::string newTexturePath, VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue);
-
   void cleanup(VkDevice device);
 };

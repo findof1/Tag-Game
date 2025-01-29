@@ -89,7 +89,6 @@ public:
       int bytesReceived = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
       if (bytesReceived > 0)
       {
-        std::cout << "Received position: " << buffer << std::endl;
 
         deserialize(buffer);
       }

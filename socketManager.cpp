@@ -20,6 +20,7 @@ std::string stripAfterJson(std::string &input)
       if (braceCount == 0)
       {
         lastValidPos = i;
+        break;
       }
     }
   }
@@ -40,9 +41,7 @@ void SocketManager::deserialize(const std::string &data)
   {
     std::string copiedData = data;
     stripAfterJson(copiedData);
-    std::cout << "Trimmed Data: " << copiedData << std::endl;
     json receivedData = json::parse(copiedData);
-    std::cout << "Parsed Json: " << receivedData << std::endl;
     int broadcastType = receivedData["type"];
 
     if (broadcastType == 0)
@@ -57,22 +56,21 @@ void SocketManager::deserialize(const std::string &data)
         player.position = position;
 
         networkedPlayers[id] = player;
-        std::cout << "Added player id: " << player.id << " Socket ID: " << id << std::endl;
       }
       else
       {
         networkedPlayers[id].position = position;
         app->editPlayer(networkedPlayers[id]);
 
-        std::cout << "Updated player ID: " << networkedPlayers[id].id << " Position: ("
+        /*std::cout << "Updated player ID: " << networkedPlayers[id].id << " Position: ("
                   << networkedPlayers[id].position.x << ", "
                   << networkedPlayers[id].position.y << ", "
-                  << networkedPlayers[id].position.z << ")" << std::endl;
+                  << networkedPlayers[id].position.z << ")" << std::endl;*/
       }
     }
     else if (broadcastType == 1)
     {
-      int id = receivedData["id"];
+      int id = receivedData["server-id"];
       if (networkedPlayers.find(id) != networkedPlayers.end())
       {
         app->removePlayer(networkedPlayers[id].id);
@@ -81,6 +79,25 @@ void SocketManager::deserialize(const std::string &data)
       else
       {
         std::cerr << "Error: Attempted to remove non-existent player with ID " << id << std::endl;
+      }
+    }
+    else if (broadcastType == 2)
+    {
+      int id = receivedData["server-id"];
+      if (id == -1)
+      {
+        app->youAreTagged();
+      }
+      else
+      {
+        if (networkedPlayers.find(id) != networkedPlayers.end())
+        {
+          app->setTagged(networkedPlayers[id].id);
+        }
+        else
+        {
+          std::cerr << "Tagged player does not exist: " << id << std::endl;
+        }
       }
     }
     else
@@ -105,6 +122,5 @@ void SocketManager::broadcast(glm::vec3 pos)
 
   std::string formattedPos = message.dump();
 
-  std::cout << "Broadcasting position: " << formattedPos << std::endl;
   send(client, formattedPos.c_str(), formattedPos.size(), 0);
 }
